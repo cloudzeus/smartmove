@@ -1,0 +1,107 @@
+/**
+ * Prisma seed για development.
+ * Run: pnpm prisma db seed  (ή pnpm db:seed)
+ */
+import { PrismaClient, UserRole, KycStatus, SaaSTier, VehicleType } from "@prisma/client";
+import bcrypt from "bcryptjs";
+
+const db = new PrismaClient();
+
+async function main() {
+  console.log("🌱 Seeding...");
+
+  // 1. PostGIS extension
+  await db.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS postgis;`);
+
+  // 2. Admin user
+  const adminPass = await bcrypt.hash("admin1234", 12);
+  const admin = await db.user.upsert({
+    where: { email: "admin@smartmove.ai" },
+    update: {},
+    create: {
+      email: "admin@smartmove.ai",
+      name: "SmartMove Admin",
+      role: UserRole.ADMIN,
+      emailVerified: new Date(),
+      passwordHash: adminPass,
+    },
+  });
+  console.log(`✓ Admin: ${admin.email}`);
+
+  // 3. Demo carriers (3)
+  const carrierSeeds = [
+    { email: "carrier1@demo.gr", name: "Δημήτρης Παπαδόπουλος", legal: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΜΕΤΑΦΟΡΕΣ ΕΕ",      vat: "100000001" },
+    { email: "carrier2@demo.gr", name: "Μαρία Ιωαννίδη",        legal: "ΙΩΑΝΝΙΔΗ ΜΕΤΑΚΟΜΙΣΕΙΣ ΟΕ",       vat: "100000002" },
+    { email: "carrier3@demo.gr", name: "Νίκος Αντωνίου",        legal: "ΑΝΤΩΝΙΟΥ EXPRESS ΑΕ",            vat: "100000003" },
+  ];
+
+  for (const seed of carrierSeeds) {
+    const pass = await bcrypt.hash("demo1234", 12);
+    const user = await db.user.upsert({
+      where: { email: seed.email },
+      update: {},
+      create: {
+        email: seed.email,
+        name: seed.name,
+        role: UserRole.CARRIER_OWNER,
+        emailVerified: new Date(),
+        passwordHash: pass,
+      },
+    });
+
+    const existingCarrier = await db.carrier.findUnique({ where: { ownerId: user.id } });
+    const carrier = existingCarrier ?? await db.carrier.create({
+      data: {
+        ownerId: user.id,
+        legalName: seed.legal,
+        vatNumber: seed.vat,
+        taxOffice: "ΦΑΕ Αθηνών",
+        address: "Λεωφ. Συγγρού 123",
+        postalCode: "11745",
+        city: "Αθήνα",
+        kycStatus: KycStatus.APPROVED,
+        approvedAt: new Date(),
+        saasTier: SaaSTier.PRO,
+        fleetSize: 3,
+        rating: 4.6,
+      },
+    });
+
+    // ένα φορτηγό ανά carrier
+    await db.vehicle.upsert({
+      where: { plate: `IK-${seed.vat.slice(-4)}` },
+      update: {},
+      create: {
+        carrierId: carrier.id,
+        plate: `IK-${seed.vat.slice(-4)}`,
+        type: VehicleType.TRUCK_5T,
+        capacityCubicM: 22,
+        capacityKg: 5000,
+      },
+    });
+    console.log(`✓ Carrier: ${carrier.legalName}`);
+  }
+
+  // 4. Demo consumers (5)
+  for (let i = 1; i <= 5; i++) {
+    const pass = await bcrypt.hash("demo1234", 12);
+    const u = await db.user.upsert({
+      where: { email: `user${i}@demo.gr` },
+      update: {},
+      create: {
+        email: `user${i}@demo.gr`,
+        name: `Demo User ${i}`,
+        role: UserRole.CONSUMER,
+        emailVerified: new Date(),
+        passwordHash: pass,
+      },
+    });
+    console.log(`✓ Consumer: ${u.email}`);
+  }
+
+  console.log("✅ Seed complete.");
+}
+
+main()
+  .catch((e) => { console.error(e); process.exit(1); })
+  .finally(async () => { await db.$disconnect(); });

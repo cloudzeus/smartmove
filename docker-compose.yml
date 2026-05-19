@@ -1,0 +1,42 @@
+version: "3.9"
+
+# Τοπικό dev — αν προτιμάς να χρησιμοποιήσεις απευθείας Aiven, αγνόησε αυτό το αρχείο
+# και βάλε το Aiven service URI ως DATABASE_URL.
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: smartmove_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smartmove
+      POSTGRES_PASSWORD: smartmove
+      POSTGRES_DB: smartmove
+      TZ: Europe/Athens
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartmove"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartmove_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+  redis_data:

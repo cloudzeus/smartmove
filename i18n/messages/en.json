@@ -1,0 +1,69 @@
+{
+  "common": {
+    "appName": "SmartMove",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signUp": "Create account",
+    "save": "Save",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "back": "Back",
+    "submit": "Submit",
+    "loading": "Loading…",
+    "or": "or"
+  },
+  "auth": {
+    "signIn": {
+      "title": "Sign in to SmartMove",
+      "subtitle": "Manage your moves in one place.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "noAccount": "No account yet?",
+      "createOne": "Create one",
+      "withMicrosoft": "Sign in with Microsoft",
+      "withGoogle": "Sign in with Google",
+      "errorInvalid": "Wrong email or password. Try again.",
+      "errorGeneric": "Something went wrong. Try again."
+    },
+    "signUp": {
+      "title": "Create your account",
+      "subtitle": "Sign up to publish a move request.",
+      "name": "Full name",
+      "email": "Email",
+      "phone": "Mobile phone (optional)",
+      "password": "Password",
+      "passwordHint": "At least 8 characters, one uppercase, one digit",
+      "consent": "I accept the Terms of Service and Privacy Policy",
+      "marketing": "I want to receive news and offers (optional)",
+      "submit": "Create account",
+      "hasAccount": "Already have an account?",
+      "signInLink": "Sign in",
+      "errorEmailTaken": "This email is already in use.",
+      "errorPasswordWeak": "Password is too weak.",
+      "errorGeneric": "Something went wrong. Try again.",
+      "withMicrosoft": "Sign up with Microsoft"
+    },
+    "menu": {
+      "myAccount": "My account",
+      "myRequests": "My requests",
+      "settings": "Settings"
+    },
+    "guard": {
+      "title": "Sign-in required",
+      "description": "Create a free account to continue building your request.",
+      "signInCta": "Sign in",
+      "signUpCta": "Create account"
+    }
+  },
+  "scan": {
+    "wizard": {
+      "createdEmailSent": "We just sent you a confirmation email with all the details."
+    }
+  },
+  "email": {
+    "subject": {
+      "moveRequestPublished": "Your request was published — SmartMove #{ref}"
+    }
+  }
+}

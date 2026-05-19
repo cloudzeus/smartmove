@@ -1,0 +1,69 @@
+{
+  "common": {
+    "appName": "SmartMove",
+    "signIn": "Σύνδεση",
+    "signOut": "Αποσύνδεση",
+    "signUp": "Εγγραφή",
+    "save": "Αποθήκευση",
+    "cancel": "Άκυρο",
+    "continue": "Συνέχεια",
+    "back": "Πίσω",
+    "submit": "Υποβολή",
+    "loading": "Φόρτωση…",
+    "or": "ή"
+  },
+  "auth": {
+    "signIn": {
+      "title": "Σύνδεση στο SmartMove",
+      "subtitle": "Διαχείριση των μεταφορών σου σε ένα μέρος.",
+      "email": "Email",
+      "password": "Κωδικός",
+      "submit": "Σύνδεση",
+      "noAccount": "Δεν έχεις λογαριασμό;",
+      "createOne": "Δημιούργησε λογαριασμό",
+      "withMicrosoft": "Σύνδεση με Microsoft",
+      "withGoogle": "Σύνδεση με Google",
+      "errorInvalid": "Λάθος email ή κωδικός. Δοκίμασε ξανά.",
+      "errorGeneric": "Κάτι πήγε στραβά. Δοκίμασε ξανά."
+    },
+    "signUp": {
+      "title": "Δημιουργία λογαριασμού",
+      "subtitle": "Φτιάξε λογαριασμό για να δημοσιεύσεις αίτημα μεταφοράς.",
+      "name": "Ονοματεπώνυμο",
+      "email": "Email",
+      "phone": "Κινητό τηλέφωνο (προαιρετικό)",
+      "password": "Κωδικός",
+      "passwordHint": "Τουλάχιστον 8 χαρακτήρες, ένα κεφαλαίο, έναν αριθμό",
+      "consent": "Αποδέχομαι τους Όρους Χρήσης και την Πολιτική Απορρήτου",
+      "marketing": "Θέλω να λαμβάνω νέα και προσφορές (προαιρετικό)",
+      "submit": "Εγγραφή",
+      "hasAccount": "Έχεις ήδη λογαριασμό;",
+      "signInLink": "Σύνδεση",
+      "errorEmailTaken": "Αυτό το email χρησιμοποιείται ήδη.",
+      "errorPasswordWeak": "Ο κωδικός είναι πολύ αδύναμος.",
+      "errorGeneric": "Κάτι πήγε στραβά. Δοκίμασε ξανά.",
+      "withMicrosoft": "Εγγραφή με Microsoft"
+    },
+    "menu": {
+      "myAccount": "Ο λογαριασμός μου",
+      "myRequests": "Τα αιτήματά μου",
+      "settings": "Ρυθμίσεις"
+    },
+    "guard": {
+      "title": "Χρειάζεται σύνδεση",
+      "description": "Δημιούργησε δωρεάν λογαριασμό για να συνεχίσεις τη δημιουργία αιτήματος.",
+      "signInCta": "Σύνδεση",
+      "signUpCta": "Δημιουργία λογαριασμού"
+    }
+  },
+  "scan": {
+    "wizard": {
+      "createdEmailSent": "Σου στείλαμε email επιβεβαίωσης με όλες τις λεπτομέρειες."
+    }
+  },
+  "email": {
+    "subject": {
+      "moveRequestPublished": "Το αίτημά σου δημοσιεύτηκε — SmartMove #{ref}"
+    }
+  }
+}

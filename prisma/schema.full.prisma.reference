@@ -1,0 +1,786 @@
+// =====================================================================
+// SmartMove AI — Unified Prisma Schema
+//   PostgreSQL 16 + PostGIS 3.4 (Aiven managed)
+//
+// Single database holds:
+//   - Auth.js (User/Account/Session/VerificationToken/Authenticator)
+//   - Domain (Carrier/Driver/Vehicle/MoveRequest/Inventory/Auction/Bid/Booking/Payment/Invoice/Review)
+//   - Spatial (RouteGeometry/PostalArea/HighwayBuffer) — PostGIS native
+//
+// Conventions:
+//   - IDs: String @id @default(cuid())
+//   - Timestamps: createdAt / updatedAt παντού
+//   - Soft delete: deletedAt DateTime?
+//   - Money: Int (σε λεπτά / cents)
+//   - Currency: String (ISO 4217, default "EUR")
+// =====================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ---------------------------------------------------------------------
+// AUTH.JS v5 — Required tables
+// ---------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?
+  passwordHash  String?
+
+  role          UserRole  @default(CONSUMER)
+  locale        String    @default("el")
+  timezone      String    @default("Europe/Athens")
+
+  marketingConsent  Boolean   @default(false)
+  dataConsent       Boolean   @default(false)
+  consentTimestamp  DateTime?
+
+  accounts         Account[]
+  sessions         Session[]
+  authenticators   Authenticator[]
+  carrier          Carrier?
+  driver           Driver?
+  moveRequests     MoveRequest[]
+  bookings         Booking[]   @relation("CustomerBookings")
+  reviewsGiven     Review[]    @relation("ReviewAuthor")
+  reviewsAbout     Review[]    @relation("ReviewSubject")
+  notifications    Notification[]
+  inventoryWallets InventoryWallet[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  lastLoginAt DateTime?
+
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  CONSUMER
+  CARRIER_OWNER
+  CARRIER_DRIVER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+  @@id([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String  @db.Text
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([userId, credentialID])
+}
+
+// ---------------------------------------------------------------------
+// CARRIERS
+// ---------------------------------------------------------------------
+
+model Carrier {
+  id          String   @id @default(cuid())
+  ownerId     String   @unique
+  legalName   String
+  tradeName   String?
+  vatNumber   String   @unique
+  taxOffice   String
+  address     String
+  postalCode  String
+  city        String
+
+  kycStatus   KycStatus @default(PENDING)
+  approvedAt  DateTime?
+  approvedBy  String?
+
+  fleetSize       Int   @default(0)
+  rating          Float @default(0)
+  totalBookings   Int   @default(0)
+  responseTimeSec Int?
+  acceptanceRate  Float?
+
+  saasTier    SaaSTier  @default(FREE)
+  saasUntil   DateTime?
+  isElectricFleet Boolean @default(false)
+
+  owner      User             @relation(fields: [ownerId], references: [id])
+  drivers    Driver[]
+  vehicles   Vehicle[]
+  bids       Bid[]
+  bookings   Booking[]
+  invoices   Invoice[]
+  payouts    Payout[]
+  sharedLoads SharedLoad[]
+  kycDocs    CarrierKycDoc[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([vatNumber])
+  @@index([kycStatus])
+  @@index([rating])
+}
+
+enum KycStatus { PENDING IN_REVIEW APPROVED REJECTED SUSPENDED }
+enum SaaSTier  { FREE PRO ENTERPRISE }
+
+model CarrierKycDoc {
+  id         String   @id @default(cuid())
+  carrierId  String
+  docType    String
+  s3Key      String
+  status     String   @default("pending")
+  reviewedAt DateTime?
+  reviewedBy String?
+  carrier    Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  @@index([carrierId])
+}
+
+model Driver {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  carrierId     String
+  licenseNumber String
+  licenseType   String
+  licenseExpiry DateTime
+  active        Boolean  @default(true)
+  rating        Float    @default(0)
+
+  user      User    @relation(fields: [userId], references: [id])
+  carrier   Carrier @relation(fields: [carrierId], references: [id])
+  vehicleAssignments VehicleAssignment[]
+  bookingAssignments BookingDriverAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
+}
+
+model Vehicle {
+  id              String      @id @default(cuid())
+  carrierId       String
+  plate           String      @unique
+  type            VehicleType
+  capacityCubicM  Float
+  capacityKg      Int
+  isElectric      Boolean     @default(false)
+  active          Boolean     @default(true)
+
+  carrier     Carrier @relation(fields: [carrierId], references: [id])
+  assignments VehicleAssignment[]
+  bookings    BookingVehicleAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
+}
+
+enum VehicleType { VAN_3_5T TRUCK_5T TRUCK_7_5T TRUCK_12T }
+
+model VehicleAssignment {
+  id        String   @id @default(cuid())
+  vehicleId String
+  driverId  String
+  from      DateTime
+  to        DateTime?
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  driver  Driver  @relation(fields: [driverId], references: [id])
+  @@index([vehicleId])
+  @@index([driverId])
+}
+
+// ---------------------------------------------------------------------
+// MOVE REQUESTS & INVENTORY
+// ---------------------------------------------------------------------
+
+model MoveRequest {
+  id              String   @id @default(cuid())
+  userId          String
+
+  fromAddress     String
+  fromPostal      String
+  fromCity        String
+  fromLat         Float
+  fromLng         Float
+  fromFloor       Int?
+  fromHasElevator Boolean  @default(true)
+
+  toAddress       String
+  toPostal        String
+  toCity          String
+  toLat           Float
+  toLng           Float
+  toFloor         Int?
+  toHasElevator   Boolean  @default(true)
+
+  preferredDate   DateTime
+  flexibilityDays Int      @default(0)
+  notes           String?  @db.Text
+
+  status          MoveRequestStatus @default(DRAFT)
+
+  totalVolumeCubicM Float?
+  totalWeightKg     Int?
+  routeDistanceKm   Float?
+  routeDurationSec  Int?
+  basePriceCents    Int?
+
+  entryFeePaid      Boolean @default(false)
+  entryFeePaymentId String?
+
+  user      User        @relation(fields: [userId], references: [id])
+  inventory Inventory?
+  auction   Auction?
+  booking   Booking?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([preferredDate])
+}
+
+enum MoveRequestStatus {
+  DRAFT
+  AWAITING_SCAN
+  SCAN_IN_PROGRESS
+  AWAITING_PAYMENT_FEE
+  AUCTION_OPEN
+  AUCTION_CLOSED
+  BOOKED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+model Inventory {
+  id                     String   @id @default(cuid())
+  moveRequestId          String   @unique
+  walletId               String?
+
+  totalVolumeCubicM      Float
+  totalWeightKg          Int
+  itemCount              Int
+  packingComplexity      Int      @default(1)
+  suggestedVehicleType   VehicleType?
+  suggestedAssemblyHours Float?
+
+  modelVersion           String
+  confidence             Float
+  humanVerified          Boolean  @default(false)
+  verifiedBy             String?
+
+  moveRequest MoveRequest      @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+  wallet      InventoryWallet? @relation(fields: [walletId], references: [id])
+  rooms       InventoryRoom[]
+  scanImages  ScanImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([walletId])
+}
+
+model InventoryWallet {
+  id          String   @id @default(cuid())
+  userId      String
+  label       String
+
+  user        User        @relation(fields: [userId], references: [id])
+  inventories Inventory[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+model InventoryRoom {
+  id          String   @id @default(cuid())
+  inventoryId String
+  name        String
+  orderIndex  Int
+  inventory   Inventory       @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  items       InventoryItem[]
+  @@index([inventoryId])
+}
+
+model InventoryItem {
+  id                  String   @id @default(cuid())
+  roomId              String
+  category            String
+  nameGreek           String
+  nameEnglish         String
+  widthCm             Float
+  heightCm            Float
+  depthCm             Float
+  volumeCubicM        Float
+  estimatedWeightKg   Float
+  condition           String
+  quantity            Int      @default(1)
+  notes               String?
+  detectionConfidence Float
+  boundingBox         Json?
+  room InventoryRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  @@index([roomId])
+}
+
+model ScanImage {
+  id          String    @id @default(cuid())
+  inventoryId String
+  s3Key       String
+  width       Int
+  height      Int
+  sizeBytes   Int
+  blurred     Boolean   @default(false)
+  processedAt DateTime?
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  @@index([inventoryId])
+}
+
+// ---------------------------------------------------------------------
+// MARKETPLACE — Auction & Bids
+// ---------------------------------------------------------------------
+
+model Auction {
+  id            String        @id @default(cuid())
+  moveRequestId String        @unique
+  openedAt      DateTime      @default(now())
+  closesAt      DateTime
+  status        AuctionStatus @default(OPEN)
+  winningBidId  String?
+  moveRequest MoveRequest @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+  bids        Bid[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  @@index([status])
+  @@index([closesAt])
+}
+
+enum AuctionStatus { OPEN CLOSED AWARDED CANCELLED }
+
+model Bid {
+  id                String      @id @default(cuid())
+  auctionId         String
+  carrierId         String
+  priceCents        Int
+  currency          String      @default("EUR")
+  includesAssembly  Boolean     @default(false)
+  includesInsurance Boolean     @default(false)
+  carbonScore       Int?
+  notes             String?     @db.Text
+  validUntil        DateTime
+  status            BidStatus   @default(SUBMITTED)
+  sharedLoadId      String?
+  sharedDiscount    Int?
+
+  auction    Auction     @relation(fields: [auctionId], references: [id])
+  carrier    Carrier     @relation(fields: [carrierId], references: [id])
+  sharedLoad SharedLoad? @relation(fields: [sharedLoadId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([auctionId, carrierId])
+  @@index([auctionId])
+  @@index([carrierId])
+  @@index([status])
+}
+
+enum BidStatus { SUBMITTED WITHDRAWN ACCEPTED REJECTED EXPIRED }
+
+// ---------------------------------------------------------------------
+// SHARED-LOAD MATCHING — UNIFIED (PostGIS native στο ίδιο DB)
+// ---------------------------------------------------------------------
+
+model SharedLoad {
+  id                 String           @id @default(cuid())
+  carrierId          String
+  startLat           Float
+  startLng           Float
+  endLat             Float
+  endLng             Float
+
+  /// PostGIS LineString geography (SRID 4326). Διαχειρίζεται με raw SQL.
+  /// Prisma δεν έχει native PostGIS type, χρησιμοποιούμε Unsupported.
+  routeGeom          Unsupported("geography(LineString, 4326)")?
+
+  scheduledAt        DateTime
+  flexHours          Int              @default(4)
+  capacityFreeCubicM Float
+  status             SharedLoadStatus @default(OPEN)
+
+  carrier Carrier            @relation(fields: [carrierId], references: [id])
+  bids    Bid[]
+  matches SharedLoadMatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+enum SharedLoadStatus { OPEN MATCHED IN_PROGRESS COMPLETED CANCELLED }
+
+model SharedLoadMatch {
+  id                  String   @id @default(cuid())
+  sharedLoadId        String
+  bookingId           String   @unique
+  matchScore          Float
+  routeOverlapPct     Float
+  capacityFillPct     Float
+  customerDiscountPct Int
+  carrierBonusPct     Int
+
+  sharedLoad SharedLoad @relation(fields: [sharedLoadId], references: [id])
+  booking    Booking    @relation(fields: [bookingId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([sharedLoadId])
+}
+
+// PostGIS pre-loaded geographic data
+model PostalArea {
+  id                 String @id @default(cuid())
+  postalCode         String @unique
+  city               String
+  region             String
+  geom               Unsupported("geography(Polygon, 4326)")
+  populationEstimate Int?
+  @@index([region])
+}
+
+model HighwayBuffer {
+  id       String @id @default(cuid())
+  name     String
+  bufferKm Int
+  geom     Unsupported("geography(Polygon, 4326)")
+  @@unique([name, bufferKm])
+}
+
+// ---------------------------------------------------------------------
+// BOOKINGS
+// ---------------------------------------------------------------------
+
+model Booking {
+  id                String        @id @default(cuid())
+  moveRequestId     String        @unique
+  customerId        String
+  carrierId         String
+  bidId             String        @unique
+
+  finalPriceCents   Int
+  commissionCents   Int
+  netToCarrierCents Int
+
+  status            BookingStatus @default(CONFIRMED)
+  scheduledAt       DateTime
+
+  confirmedAt        DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  qrCodeHash    String?   @unique
+  qrScannedAt   DateTime?
+
+  moveRequest MoveRequest @relation(fields: [moveRequestId], references: [id])
+  customer    User        @relation("CustomerBookings", fields: [customerId], references: [id])
+  carrier     Carrier     @relation(fields: [carrierId], references: [id])
+
+  payments           Payment[]
+  invoice            Invoice?
+  driverAssignments  BookingDriverAssignment[]
+  vehicleAssignments BookingVehicleAssignment[]
+  sharedLoadMatch    SharedLoadMatch?
+  reviews            Review[]
+  insurance          Insurance?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+enum BookingStatus { CONFIRMED IN_PROGRESS COMPLETED CANCELLED DISPUTED REFUNDED }
+
+model BookingDriverAssignment {
+  id        String  @id @default(cuid())
+  bookingId String
+  driverId  String
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  driver    Driver  @relation(fields: [driverId], references: [id])
+  @@unique([bookingId, driverId])
+}
+
+model BookingVehicleAssignment {
+  id        String  @id @default(cuid())
+  bookingId String
+  vehicleId String
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  @@unique([bookingId, vehicleId])
+}
+
+// ---------------------------------------------------------------------
+// PAYMENTS (Viva Wallet)
+// ---------------------------------------------------------------------
+
+model Payment {
+  id                  String        @id @default(cuid())
+  bookingId           String?
+  moveRequestId       String?
+  customerId          String
+
+  type                PaymentType
+  status              PaymentStatus @default(PENDING)
+  amountCents         Int
+  currency            String        @default("EUR")
+
+  vivaOrderCode       String?       @unique
+  vivaTransactionId   String?       @unique
+  vivaChargeToken     String?
+  vivaPaymentMethod   String?
+
+  authorizedAt        DateTime?
+  capturedAt          DateTime?
+  refundedAt          DateTime?
+  refundedAmountCents Int           @default(0)
+  failedAt            DateTime?
+  failureReason       String?
+
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([bookingId])
+  @@index([status])
+}
+
+enum PaymentType {
+  ENTRY_FEE
+  BOOKING_ESCROW
+  BOOKING_CAPTURE
+  REFUND
+  INSURANCE
+  SAAS_SUBSCRIPTION
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  REFUNDED
+  PARTIAL_REFUND
+  FAILED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------
+// INVOICES (AADE myDATA)
+// ---------------------------------------------------------------------
+
+model Invoice {
+  id              String        @id @default(cuid())
+  bookingId       String        @unique
+  carrierId       String
+
+  issuerVat       String
+  issuerName      String
+  customerVat     String?
+  customerName    String
+  customerAddress String
+
+  netAmountCents   Int
+  vatAmountCents   Int
+  totalAmountCents Int
+  currency         String  @default("EUR")
+  vatRate          Float   @default(0.24)
+
+  mark        String? @unique
+  uid         String? @unique
+  qrCode      String?
+  invoiceType String  @default("1.1")
+  series      String  @default("Α")
+  number      String
+
+  status      InvoiceStatus @default(DRAFT)
+  issuedAt    DateTime?
+  cancelledAt DateTime?
+  mydataError String?       @db.Text
+  pdfS3Key    String?
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  carrier Carrier @relation(fields: [carrierId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
+  @@index([status])
+  @@index([series, number])
+}
+
+enum InvoiceStatus { DRAFT SUBMITTED ACCEPTED CANCELLED FAILED }
+
+// ---------------------------------------------------------------------
+// REVIEWS, INSURANCE, PAYOUTS, NOTIFICATIONS, AUDIT
+// ---------------------------------------------------------------------
+
+model Review {
+  id                  String   @id @default(cuid())
+  bookingId           String
+  authorId            String
+  subjectId           String
+  authorRole          UserRole
+
+  rating              Int
+  ratingPunctuality   Int?
+  ratingCare          Int?
+  ratingCommunication Int?
+
+  comment       String?   @db.Text
+  publishedAt   DateTime?
+  flaggedAt     DateTime?
+  flagReason    String?
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  author  User    @relation("ReviewAuthor", fields: [authorId], references: [id])
+  subject User    @relation("ReviewSubject", fields: [subjectId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bookingId, authorId])
+  @@index([subjectId])
+}
+
+model Insurance {
+  id               String   @id @default(cuid())
+  bookingId        String   @unique
+  provider         String
+  policyNumber     String
+  coverageCents    Int
+  premiumCents     Int
+  startsAt         DateTime
+  endsAt           DateTime
+  status           String   @default("active")
+  certificateS3Key String?
+  booking          Booking  @relation(fields: [bookingId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  @@index([bookingId])
+}
+
+model Payout {
+  id            String   @id @default(cuid())
+  carrierId     String
+  amountCents   Int
+  currency      String   @default("EUR")
+  periodStart   DateTime
+  periodEnd     DateTime
+  iban          String
+  vivaPayoutId  String?  @unique
+  status        String   @default("pending")
+  processedAt   DateTime?
+  failureReason String?
+  carrier       Carrier  @relation(fields: [carrierId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([carrierId])
+  @@index([status])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String    @db.Text
+  link      String?
+  channel   String
+  readAt    DateTime?
+  sentAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorType  String
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  @@index([actorId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}

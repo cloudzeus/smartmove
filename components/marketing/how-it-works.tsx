@@ -7,21 +7,29 @@ const STEPS = [
     icon: FileText,
     title: "Δημιουργείς ανάρτηση",
     desc: "Συμπλήρωσε σε λίγα βήματα: από πού, προς πού, τι μεταφέρεις, πότε.",
+    gradient: "from-blue-500 to-blue-700",
+    ring: "ring-blue-200",
   },
   {
     icon: Camera,
     title: "Σκανάρεις τον χώρο",
     desc: "Με AI εκτιμούμε όγκο και αντικείμενα από φωτογραφίες — σε δευτερόλεπτα.",
+    gradient: "from-fuchsia-500 to-violet-600",
+    ring: "ring-fuchsia-200",
   },
   {
     icon: Inbox,
     title: "Λαμβάνεις προσφορές",
     desc: "Επιβεβαιωμένοι μεταφορείς απαντούν με τιμές, χρόνους και αξιολογήσεις.",
+    gradient: "from-amber-400 to-orange-500",
+    ring: "ring-amber-200",
   },
   {
     icon: Truck,
     title: "Η μεταφορά γίνεται",
     desc: "Επίλεξε αυτόν που σου ταιριάζει, πλήρωσε με ασφάλεια, ολοκλήρωσε με QR.",
+    gradient: "from-red-500 to-rose-600",
+    ring: "ring-red-200",
   },
 ] as const;
 
@@ -47,14 +55,16 @@ export function HowItWorks() {
           {STEPS.map((step, i) => (
             <li
               key={step.title}
-              className="relative flex h-full flex-col gap-4 rounded-2xl border border-border bg-background p-6 shadow-[var(--shadow-card)] transition-transform hover:-translate-y-0.5"
+              className="group relative flex h-full flex-col gap-4 rounded-2xl border border-border bg-background p-6 shadow-[var(--shadow-card)] transition-all hover:-translate-y-1 hover:shadow-[var(--shadow-pop)]"
             >
               <div className="flex items-center gap-3">
-                <span className="grid size-10 place-items-center rounded-xl bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]">
+                <span
+                  className={`grid size-11 place-items-center rounded-xl bg-gradient-to-br ${step.gradient} text-white shadow-md ring-4 ${step.ring} transition-transform group-hover:scale-110`}
+                >
                   <step.icon className="size-5" />
                 </span>
-                <span className="font-mono text-xs font-medium text-muted-foreground">
-                  Βήμα {i + 1}
+                <span className="font-mono text-xs font-semibold tracking-wider text-foreground/70">
+                  ΒΗΜΑ {String(i + 1).padStart(2, "0")}
                 </span>
               </div>
               <div>

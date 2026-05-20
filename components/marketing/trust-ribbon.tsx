@@ -4,26 +4,34 @@ const ITEMS = [
   {
     icon: Star,
     iconClass: "fill-amber-400 stroke-amber-400",
+    chipClass: "bg-amber-100 text-amber-700",
     value: "4.8 / 5",
     label: "από 12.500+ πελάτες",
   },
   {
     icon: Truck,
+    chipClass:
+      "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]",
     value: "1.200+",
     label: "επαληθευμένοι μεταφορείς",
   },
   {
     icon: Users,
+    chipClass:
+      "bg-[var(--color-brand-red-light)] text-[var(--color-brand-red-deep)]",
     value: "85.000+",
     label: "μεταφορές έχουν ολοκληρωθεί",
   },
   {
     icon: ShieldCheck,
+    chipClass: "bg-emerald-100 text-emerald-700",
     value: "100%",
     label: "ασφάλεια πληρωμών μέσω escrow",
   },
   {
     icon: Award,
+    chipClass:
+      "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]",
     value: "12 χρόνια",
     label: "εμπειρία στις μεταφορές",
   },
@@ -42,7 +50,9 @@ export function TrustRibbon() {
               key={item.value + i}
               className="flex items-center gap-3 py-5 md:justify-center md:px-4 md:py-6"
             >
-              <span className="grid size-10 place-items-center rounded-xl bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]">
+              <span
+                className={`grid size-10 place-items-center rounded-xl ${item.chipClass}`}
+              >
                 <item.icon
                   className={`size-5 ${"iconClass" in item ? item.iconClass : ""}`}
                 />

@@ -19,22 +19,25 @@ export async function SiteHeader() {
 
   return (
     <>
-      {/* Slim utility bar */}
-      <div className="hidden border-b border-border bg-secondary/50 text-xs text-muted-foreground lg:block">
+      {/* Slim utility bar — branded gradient */}
+      <div className="hidden border-b border-[var(--color-brand-blue-deep)]/30 bg-gradient-to-r from-[var(--color-brand-blue-deep)] via-[var(--color-brand-blue)] to-[var(--color-brand-blue-deep)] text-xs text-white/90 lg:block">
         <div className="mx-auto flex h-9 max-w-[1280px] items-center justify-between px-4 sm:px-6 lg:px-8">
           <span className="flex items-center gap-2">
-            <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
+            <span className="relative inline-flex size-2 items-center justify-center">
+              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/70" />
+              <span className="relative inline-block size-2 rounded-full bg-emerald-400" />
+            </span>
             Online τώρα · ~127 αιτήματα μεταφοράς σήμερα
           </span>
           <span className="flex items-center gap-4">
             <a
               href="tel:+302103000450"
-              className="flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-[var(--color-brand-blue)]"
+              className="flex items-center gap-1.5 font-semibold text-white transition-colors hover:text-[var(--color-brand-red-light)]"
             >
               <Phone className="size-3" />
               210 3000 450
             </a>
-            <span>·</span>
+            <span className="text-white/50">·</span>
             <span>Δευ–Κυρ 08:00–22:00</span>
           </span>
         </div>

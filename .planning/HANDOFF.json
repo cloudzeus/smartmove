@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-20T04:26:00.091Z",
+  "timestamp": "2026-05-20T06:47:21.961Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -22,25 +22,25 @@
     },
     {
       "status": "M",
-      "path": "app/(marketing)/scan/page.tsx"
+      "path": "app/globals.css"
     },
     {
       "status": "M",
-      "path": "components/scan/wizard-shell.tsx"
+      "path": "components/marketing/hero.tsx"
     },
     {
       "status": "M",
-      "path": "lib/auth.config.ts"
+      "path": "components/marketing/how-it-works.tsx"
     },
     {
-      "status": "R",
-      "path": "middleware.ts -> proxy.ts"
+      "status": "M",
+      "path": "components/marketing/site-header.tsx"
     },
     {
-      "status": "??",
-      "path": "components/scan/auth-gate-dialog.tsx"
+      "status": "M",
+      "path": "components/marketing/trust-ribbon.tsx"
     }
   ],
   "next_action": null,
-  "context_notes": "Recent commits:\n59661c9 camera pro problem\n8077e2e camera pro problem\nd14d505 camera pro problem\n3bfaf88 camera pro problem\n9f0fbde first major commit"
+  "context_notes": "Recent commits:\n94bc86b camera pro problem\n59661c9 camera pro problem\n8077e2e camera pro problem\nd14d505 camera pro problem\n3bfaf88 camera pro problem"
 }

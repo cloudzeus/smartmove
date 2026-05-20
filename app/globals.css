@@ -236,4 +236,24 @@
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+
+  /* Slow drifting blob — used in hero glows */
+  .smartmove-blob {
+    animation: smartmove-blob 14s ease-in-out infinite;
+  }
+  @keyframes smartmove-blob {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(20px, -16px) scale(1.06); }
+    66%      { transform: translate(-18px, 14px) scale(0.96); }
+  }
+
+  /* Animated gradient text */
+  .smartmove-gradient-text {
+    background-size: 200% 200%;
+    animation: smartmove-gradient-shift 6s ease-in-out infinite;
+  }
+  @keyframes smartmove-gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
 }

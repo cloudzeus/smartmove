@@ -10,34 +10,67 @@ import { QuoteWidget } from "./quote-widget";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden border-b border-border bg-background">
+    <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-[var(--color-brand-blue-light)] via-[var(--color-brand-blue-soft)]/40 to-background">
       <div className="absolute inset-0 -z-10 smartmove-hero-grid" aria-hidden />
+      {/* Primary blue glow top-left */}
       <div
-        className="absolute inset-x-0 top-0 -z-10 h-[520px] opacity-70"
+        className="smartmove-blob absolute -top-32 -left-32 -z-10 h-[520px] w-[520px] rounded-full opacity-70 blur-3xl"
         style={{
           background:
-            "radial-gradient(60% 50% at 50% 0%, rgba(37,99,235,0.12), transparent 70%)",
+            "radial-gradient(circle, rgba(37,99,235,0.45), transparent 70%)",
+        }}
+        aria-hidden
+      />
+      {/* Red accent glow top-right */}
+      <div
+        className="smartmove-blob absolute -top-24 -right-24 -z-10 h-[420px] w-[420px] rounded-full opacity-60 blur-3xl"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(239,68,68,0.4), transparent 70%)",
+          animationDelay: "-4s",
+        }}
+        aria-hidden
+      />
+      {/* Amber accent bottom-center */}
+      <div
+        className="smartmove-blob absolute bottom-0 left-1/2 -z-10 h-[360px] w-[640px] -translate-x-1/2 translate-y-1/3 rounded-full opacity-40 blur-3xl"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(245,158,11,0.25), transparent 70%)",
+          animationDelay: "-8s",
+        }}
+        aria-hidden
+      />
+      {/* Central wash */}
+      <div
+        className="absolute inset-x-0 top-0 -z-10 h-[560px] opacity-80"
+        style={{
+          background:
+            "radial-gradient(60% 50% at 50% 0%, rgba(37,99,235,0.18), transparent 70%)",
         }}
         aria-hidden
       />
 
       <div className="mx-auto max-w-[1280px] px-4 pt-12 pb-16 sm:px-6 lg:px-8 lg:pt-16 lg:pb-20">
         <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-          <Badge variant="default" className="mb-5 gap-2">
+          <Badge
+            variant="default"
+            className="mb-5 gap-2 bg-gradient-to-r from-[var(--color-brand-blue-deep)] via-[var(--color-brand-blue)] to-[var(--color-brand-red)] text-white shadow-[var(--shadow-cta)]"
+          >
             <Sparkles className="size-3.5" />
             ΝΕΟ · AI εκτίμηση όγκου σε 10 δευτερόλεπτα
           </Badge>
 
           <h1 className="font-display text-[2rem] font-extrabold leading-[1.1] tracking-tight text-foreground sm:text-5xl lg:text-[3.5rem]">
             Σύγκρινε προσφορές από{" "}
-            <span className="text-[var(--color-brand-blue)]">
+            <span className="smartmove-gradient-text bg-gradient-to-r from-[var(--color-brand-blue-deep)] via-[var(--color-brand-blue)] to-[var(--color-brand-red)] bg-clip-text text-transparent">
               1.200+ επαληθευμένους μεταφορείς
             </span>
             .{" "}
             <span className="relative inline-block">
               Δωρεάν
               <span
-                className="absolute -bottom-1 left-0 right-0 h-2 -z-10 rounded-full bg-[var(--color-brand-red-light)]"
+                className="absolute -bottom-1 left-0 right-0 h-3 -z-10 rounded-full bg-gradient-to-r from-[var(--color-brand-red-light)] via-[var(--color-brand-red)]/40 to-[var(--color-brand-red-light)]"
                 aria-hidden
               />
             </span>

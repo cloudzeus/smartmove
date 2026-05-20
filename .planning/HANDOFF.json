@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-19T17:43:55.414Z",
+  "timestamp": "2026-05-20T03:54:53.357Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -18,129 +18,9 @@
   "uncommitted_files": [
     {
       "status": "M",
-      "path": "app/globals.css"
-    },
-    {
-      "status": "M",
-      "path": "app/layout.tsx"
-    },
-    {
-      "status": "D",
-      "path": "app/page.tsx"
-    },
-    {
-      "status": "M",
-      "path": "next.config.ts"
-    },
-    {
-      "status": "M",
-      "path": "package-lock.json"
-    },
-    {
-      "status": "M",
-      "path": "package.json"
-    },
-    {
-      "status": "??",
-      "path": ".planning/"
-    },
-    {
-      "status": "??",
-      "path": "\"CLAUDE copy.md\""
-    },
-    {
-      "status": "??",
-      "path": "PROMPTS.md"
-    },
-    {
-      "status": "??",
-      "path": "\"README copy.md\""
-    },
-    {
-      "status": "??",
-      "path": "app/(auth)/"
-    },
-    {
-      "status": "??",
-      "path": "app/(marketing)/"
-    },
-    {
-      "status": "??",
-      "path": "app/actions.ts"
-    },
-    {
-      "status": "??",
-      "path": "app/admin/"
-    },
-    {
-      "status": "??",
-      "path": "app/api/"
-    },
-    {
-      "status": "??",
-      "path": "app/carrier/"
-    },
-    {
-      "status": "??",
-      "path": "app/dashboard/"
-    },
-    {
-      "status": "??",
-      "path": "app/terms/"
-    },
-    {
-      "status": "??",
-      "path": "components.json"
-    },
-    {
-      "status": "??",
-      "path": "components/"
-    },
-    {
-      "status": "??",
-      "path": "docker-compose.yml"
-    },
-    {
-      "status": "??",
-      "path": "docs/"
-    },
-    {
-      "status": "??",
-      "path": "i18n/"
-    },
-    {
-      "status": "??",
-      "path": "lib/"
-    },
-    {
-      "status": "??",
-      "path": "middleware.ts"
-    },
-    {
-      "status": "??",
-      "path": "\"package copy.json\""
-    },
-    {
-      "status": "??",
-      "path": "prisma.config.ts"
-    },
-    {
-      "status": "??",
-      "path": "prisma/"
-    },
-    {
-      "status": "??",
-      "path": "scripts/"
-    },
-    {
-      "status": "??",
-      "path": "server/"
-    },
-    {
-      "status": "??",
-      "path": "types/"
+      "path": ".planning/HANDOFF.json"
     }
   ],
   "next_action": null,
-  "context_notes": "Recent commits:\nc8ff2f2 Initial commit from Create Next App"
+  "context_notes": "Recent commits:\n9f0fbde first major commit\nc8ff2f2 Initial commit from Create Next App"
 }

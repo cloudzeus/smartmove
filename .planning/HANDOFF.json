@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-20T03:54:53.357Z",
+  "timestamp": "2026-05-20T03:58:53.612Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -15,12 +15,7 @@
   "blockers": [],
   "human_actions_pending": [],
   "decisions": [],
-  "uncommitted_files": [
-    {
-      "status": "M",
-      "path": ".planning/HANDOFF.json"
-    }
-  ],
+  "uncommitted_files": [],
   "next_action": null,
-  "context_notes": "Recent commits:\n9f0fbde first major commit\nc8ff2f2 Initial commit from Create Next App"
+  "context_notes": "Recent commits:\n3bfaf88 camera pro problem\n9f0fbde first major commit\nc8ff2f2 Initial commit from Create Next App"
 }

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 
+import { auth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { WizardShell } from "@/components/scan/wizard-shell";
 
@@ -10,7 +11,10 @@ export const metadata: Metadata = {
     "Δημιούργησε αίτημα μεταφοράς σε 3 βήματα. Επίλεξε AI σκανάρισμα ή λίστα αντικειμένων.",
 };
 
-export default function ScanPage() {
+export default async function ScanPage() {
+  const session = await auth();
+  const isAuthed = !!session?.user?.id;
+
   return (
     <>
       <section className="border-b border-border bg-card">
@@ -39,7 +43,7 @@ export default function ScanPage() {
             </div>
           }
         >
-          <WizardShell />
+          <WizardShell isAuthed={isAuthed} />
         </Suspense>
       </div>
     </>

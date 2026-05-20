@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ArrowLeft, MapPin, Repeat } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createMoveRequest } from "@/server/actions/move-request.action";
+import { AuthGateDialog } from "./auth-gate-dialog";
 import { ContractSummary } from "./contract-summary";
 import { ManualItemPicker } from "./manual-item-picker";
 import { MethodPicker } from "./method-picker";
@@ -24,7 +25,7 @@ import {
   type WizardStep,
 } from "./wizard-types";
 
-export function WizardShell() {
+export function WizardShell({ isAuthed = false }: { isAuthed?: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -48,11 +49,45 @@ export function WizardShell() {
   const [emailSent, setEmailSent] = useState(false);
   const [multiStop, setMultiStop] = useState(false);
   const [stops, setStops] = useState<MoveStop[]>([]);
+  const [authed, setAuthed] = useState(isAuthed);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authReason, setAuthReason] = useState<"ai" | "submit">("ai");
+  const pendingActionRef = useRef<(() => void) | null>(null);
 
-  const handleMethodSelect = useCallback((m: InventoryMethod) => {
-    setMethod(m);
-    setStep("inventory");
+  const requireAuth = useCallback(
+    (reason: "ai" | "submit", action: () => void) => {
+      if (authed) {
+        action();
+        return;
+      }
+      pendingActionRef.current = action;
+      setAuthReason(reason);
+      setAuthOpen(true);
+    },
+    [authed],
+  );
+
+  const handleAuthed = useCallback(() => {
+    setAuthed(true);
+    const next = pendingActionRef.current;
+    pendingActionRef.current = null;
+    if (next) next();
   }, []);
+
+  const handleMethodSelect = useCallback(
+    (m: InventoryMethod) => {
+      if (m === "ai") {
+        requireAuth("ai", () => {
+          setMethod("ai");
+          setStep("inventory");
+        });
+        return;
+      }
+      setMethod(m);
+      setStep("inventory");
+    },
+    [requireAuth],
+  );
 
   const handleAiContinue = useCallback((aiItems: JobItem[]) => {
     setItems(aiItems);
@@ -83,7 +118,7 @@ export function WizardShell() {
     setStep("inventory");
   }, []);
 
-  const handleSubmit = useCallback(async () => {
+  const doSubmit = useCallback(async () => {
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -123,6 +158,18 @@ export function WizardShell() {
       });
 
       if (!result.ok) {
+        // If the server rejected because the user isn't authed
+        // (e.g. session expired), prompt without losing state.
+        if (/συνδεθ/i.test(result.error)) {
+          setSubmitting(false);
+          setAuthed(false);
+          pendingActionRef.current = () => {
+            void doSubmit();
+          };
+          setAuthReason("submit");
+          setAuthOpen(true);
+          return;
+        }
         setSubmitError(result.error);
         setSubmitting(false);
         return;
@@ -140,6 +187,12 @@ export function WizardShell() {
       );
     }
   }, [items, property, route, router, multiStop, stops]);
+
+  const handleSubmit = useCallback(() => {
+    requireAuth("submit", () => {
+      void doSubmit();
+    });
+  }, [requireAuth, doSubmit]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -203,6 +256,25 @@ export function WizardShell() {
           emailSent={emailSent}
         />
       )}
+
+      <AuthGateDialog
+        open={authOpen}
+        onOpenChange={(open) => {
+          setAuthOpen(open);
+          if (!open) pendingActionRef.current = null;
+        }}
+        onAuthed={handleAuthed}
+        title={
+          authReason === "ai"
+            ? "Σύνδεση για AI σκανάρισμα"
+            : "Σύνδεση για να ολοκληρώσεις"
+        }
+        description={
+          authReason === "ai"
+            ? "Το AI σκανάρισμα χρειάζεται λογαριασμό για να αποθηκεύσει με ασφάλεια τις φωτογραφίες σου. Τα στοιχεία που έχεις ήδη συμπληρώσει διατηρούνται."
+            : "Συνδέσου ή δημιούργησε λογαριασμό για να υποβάλεις το αίτημα. Τα στοιχεία που συμπλήρωσες διατηρούνται."
+        }
+      />
     </div>
   );
 }

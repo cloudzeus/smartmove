@@ -39,6 +39,7 @@ export default {
         "/",
         "/sign-in",
         "/sign-up",
+        "/scan",
         "/api/auth",
         "/api/places",
       ];
@@ -71,8 +72,10 @@ export default {
         );
       }
 
-      // Any authenticated area (request creation, customer dashboard)
-      if (path.startsWith("/scan") || path.startsWith("/dashboard")) {
+      // Any authenticated area (customer dashboard).
+      // Note: /scan is public — auth is requested in-app only when needed
+      // (AI scan + final submit) so the user does not lose form state.
+      if (path.startsWith("/dashboard")) {
         return isLoggedIn;
       }
 

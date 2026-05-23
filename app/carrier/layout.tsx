@@ -3,7 +3,12 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireAcceptedTerms } from "@/lib/terms";
-import { CarrierSidebar } from "@/components/carrier/sidebar";
+import {
+  CarrierBottomNav,
+  CarrierSidebar,
+  type Badges,
+} from "@/components/carrier/sidebar";
+import { CarrierCommandPalette } from "@/components/carrier/command-palette";
 
 export default async function CarrierLayout({
   children,
@@ -28,14 +33,45 @@ export default async function CarrierLayout({
 
   await requireAcceptedTerms("/carrier");
 
-  const membership = await db.tenantMembership.findFirst({
-    where: { userId: session.user.id },
-    include: { tenant: { select: { legalName: true, commercialName: true } } },
-    orderBy: { createdAt: "asc" },
-  });
+  const userId = session.user.id;
+
+  const [membership, newLeads, openOffers, activeJobs, pendingReviews] =
+    await Promise.all([
+      db.tenantMembership.findFirst({
+        where: { userId },
+        include: { tenant: { select: { legalName: true, commercialName: true } } },
+        orderBy: { createdAt: "asc" },
+      }),
+      // Available leads (PUBLISHED requests where the carrier hasn't offered yet)
+      db.moveRequest.count({
+        where: {
+          status: "PUBLISHED",
+          offers: { none: { carrierUserId: userId } },
+        },
+      }),
+      db.offer.count({
+        where: { carrierUserId: userId, status: "OPEN" },
+      }),
+      db.moveRequest.count({
+        where: {
+          status: "AWARDED",
+          offers: { some: { carrierUserId: userId, status: "ACCEPTED" } },
+        },
+      }),
+      // Reviews the carrier hasn't responded to (placeholder: total reviews
+      // received — we surface them so the carrier can read them).
+      db.review.count({ where: { carrierUserId: userId } }),
+    ]);
+
+  const badges: Badges = {
+    newLeads,
+    openOffers,
+    activeJobs,
+    pendingReviews,
+  };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="carrier-shell flex min-h-screen bg-background">
       <CarrierSidebar
         user={{
           name: session.user.name,
@@ -48,8 +84,13 @@ export default async function CarrierLayout({
             : null
         }
         canAccessAdmin={role === "SUPERADMIN" || role === "EMPLOYEE"}
+        badges={badges}
       />
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+        {children}
+      </div>
+      <CarrierBottomNav badges={badges} />
+      <CarrierCommandPalette />
     </div>
   );
 }

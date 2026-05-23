@@ -59,17 +59,17 @@ export default async function OffersPage() {
             {offers.map((o) => (
               <li
                 key={o.id}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-brand-blue)]/30 hover:shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-brand-blue)]/30 hover:shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-5"
               >
-                <div>
-                  <p className="font-semibold text-foreground">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground sm:text-base">
                     {o.carrier.name ?? o.carrier.email}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-muted-foreground">
                     {o.moveRequest.fromAddress} → {o.moveRequest.toAddress}
                   </p>
                 </div>
-                <span className="font-display text-xl font-bold text-[var(--color-brand-blue-deep)]">
+                <span className="shrink-0 font-display text-lg font-bold tabular-nums text-[var(--color-brand-blue-deep)] sm:text-xl">
                   {(o.priceCents / 100).toFixed(0)}€
                 </span>
               </li>

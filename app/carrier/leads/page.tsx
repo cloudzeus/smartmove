@@ -26,7 +26,7 @@ export default async function CarrierLeadsPage() {
           { label: "Έχεις προσφέρει", value: bidded },
         ]}
       />
-      <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-3 sm:px-5 lg:py-4">
         <LeadsClient leads={leads} />
       </div>
     </>

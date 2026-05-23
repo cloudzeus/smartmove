@@ -50,7 +50,7 @@ export function MetricCard({
   const inner = (
     <div
       className={cn(
-        "group relative h-full overflow-hidden rounded-2xl border border-border bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_1px_3px_rgba(15,23,42,0.06)] transition-all",
+        "group relative h-full overflow-hidden rounded-2xl border border-border bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_1px_3px_rgba(15,23,42,0.06)] transition-all sm:p-5",
         "hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(15,23,42,0.08)]",
         "ring-1",
         a.ring,
@@ -73,11 +73,11 @@ export function MetricCard({
         )}
       </div>
 
-      <div className="mt-4">
-        <p className="font-display text-3xl font-extrabold leading-none text-foreground tabular-nums sm:text-[2rem]">
+      <div className="mt-3 sm:mt-4">
+        <p className="font-display text-2xl font-extrabold leading-none text-foreground tabular-nums sm:text-[2rem]">
           {value}
         </p>
-        <p className="mt-1.5 text-sm font-medium text-foreground">{label}</p>
+        <p className="mt-1.5 text-xs font-medium text-foreground sm:text-sm">{label}</p>
         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
           {typeof deltaPct === "number" && (
             <span

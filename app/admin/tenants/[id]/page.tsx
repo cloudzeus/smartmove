@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { TenantDetailClient } from "@/components/admin/tenant-detail-client";
+import { SetPasswordButton } from "@/components/admin/set-password-button";
+import { SendOtpButton } from "@/components/admin/send-otp-button";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +66,8 @@ export default async function TenantDetailPage({ params }: PageProps) {
                 <Building2 className="size-6" />
               </span>
             )}
+            <SendOtpButton tenantId={tenant.id} size="md" />
+            <SetPasswordButton tenantId={tenant.id} size="md" />
             <Link
               href={`/admin/tenants/${tenant.id}/edit`}
               className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-foreground px-4 text-sm font-bold text-background hover:bg-foreground/90"

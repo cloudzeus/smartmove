@@ -3,28 +3,224 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   CalendarClock,
+  CheckCircle2,
   ChevronDown,
+  Download,
+  FileText,
   Lock,
   MapPin,
   Package,
   Users,
 } from "lucide-react";
 
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getLead, listMyVehicles } from "@/server/actions/carrier-leads.action";
 import { RequestMap, type RouteStop } from "@/components/dashboard/request-map";
 import { OfferForm } from "@/components/carrier/offer-form";
+import {
+  PartnerQuoteSection,
+  type PartnerOption,
+  type QuoteRequestRow,
+} from "@/components/carrier/partner-quote-section";
+import {
+  TasksPanel,
+  type PanelTask,
+  type EmployeeOption,
+  type PartnerOption as TaskPartnerOption,
+  type VehicleOption,
+} from "@/components/carrier/tasks-panel";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ matchPrice?: string }>;
 }
 
-export default async function CarrierLeadDetailPage({ params }: PageProps) {
+export default async function CarrierLeadDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
+  const sp = await searchParams;
+  const matchPriceEur = sp.matchPrice ? Number(sp.matchPrice) : null;
   const [l, vehicles] = await Promise.all([getLead(id), listMyVehicles()]);
   if (!l) notFound();
+
+  // Partner quote data — only available for tenant carriers.
+  const session = await auth();
+  const membership = session?.user?.id
+    ? await db.tenantMembership.findFirst({
+        where: { userId: session.user.id },
+        select: { tenantId: true },
+        orderBy: { createdAt: "asc" },
+      })
+    : null;
+
+  let partnerOptions: PartnerOption[] = [];
+  let companyOptions: import("@/components/carrier/partner-quote-section").CompanyOption[] =
+    [];
+  let contactOptions: import("@/components/carrier/partner-quote-section").ContactOption[] =
+    [];
+  let quoteRequests: QuoteRequestRow[] = [];
+  let panelTasks: PanelTask[] = [];
+  let employeeOptions: EmployeeOption[] = [];
+  let taskPartnerOptions: TaskPartnerOption[] = [];
+  let vehicleOptions: VehicleOption[] = [];
+  if (membership) {
+    const [partners, companies, contacts, quotes, taskRows, employees, vehiclesRows] =
+      await Promise.all([
+      db.carrierPartner.findMany({
+        where: { tenantId: membership.tenantId, deletedAt: null },
+        include: {
+          company: { select: { id: true, legalName: true, commercialName: true } },
+        },
+        orderBy: { name: "asc" },
+      }),
+      db.partnerCompany.findMany({
+        where: { tenantId: membership.tenantId, deletedAt: null },
+        select: {
+          id: true,
+          legalName: true,
+          commercialName: true,
+          vat: true,
+          email: true,
+          phone: true,
+        },
+        orderBy: [{ commercialName: "asc" }, { legalName: "asc" }],
+      }),
+      db.partnerContact.findMany({
+        where: {
+          deletedAt: null,
+          company: { tenantId: membership.tenantId, deletedAt: null },
+        },
+        include: {
+          company: {
+            select: { id: true, legalName: true, commercialName: true },
+          },
+        },
+        orderBy: { name: "asc" },
+      }),
+      db.partnerQuoteRequest.findMany({
+        where: { tenantId: membership.tenantId, moveRequestId: id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          partner: { select: { name: true } },
+          partnerCompany: { select: { legalName: true, commercialName: true } },
+        },
+      }),
+      db.jobTask.findMany({
+        where: { tenantId: membership.tenantId, moveRequestId: id },
+        orderBy: { startAt: "asc" },
+        include: {
+          assigneeEmployee: { select: { name: true } },
+          assigneePartner: {
+            select: { name: true, company: { select: { commercialName: true, legalName: true } } },
+          },
+          vehicle: { select: { plate: true } },
+        },
+      }),
+      db.carrierEmployee.findMany({
+        where: { tenantId: membership.tenantId, deletedAt: null, active: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, role: true },
+      }),
+      db.vehicle.findMany({
+        where: { tenantId: membership.tenantId, deletedAt: null },
+        orderBy: { plate: "asc" },
+        select: { id: true, plate: true, brand: true, model: true },
+      }),
+    ]);
+    partnerOptions = partners.map((p) => ({
+      id: p.id,
+      name: p.name,
+      kind: p.kind,
+      email: p.email,
+      phone: p.phone,
+      companyId: p.company?.id ?? null,
+      companyName: p.company
+        ? p.company.commercialName ?? p.company.legalName
+        : null,
+    }));
+    companyOptions = companies.map((c) => ({
+      id: c.id,
+      name: c.commercialName ?? c.legalName,
+      vat: c.vat,
+      email: c.email,
+      phone: c.phone,
+    }));
+    contactOptions = contacts.map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role,
+      email: c.email,
+      phone: c.phone,
+      companyId: c.company.id,
+      companyName: c.company.commercialName ?? c.company.legalName,
+    }));
+    taskPartnerOptions = partners.map((p) => ({
+      id: p.id,
+      name: p.name,
+      kind: p.kind,
+      companyName: p.company
+        ? p.company.commercialName ?? p.company.legalName
+        : null,
+    }));
+    quoteRequests = quotes.map((q) => ({
+      id: q.id,
+      status: q.status,
+      service: q.service as QuoteRequestRow["service"],
+      recipientEmail: q.recipientEmail,
+      recipientName: q.recipientName,
+      notes: q.notes,
+      quotedPriceCents: q.quotedPriceCents,
+      quotedNotes: q.quotedNotes,
+      quotedAt: q.quotedAt,
+      expiresAt: q.expiresAt,
+      createdAt: q.createdAt,
+      partnerName: q.partner?.name ?? null,
+      companyName: q.partnerCompany
+        ? q.partnerCompany.commercialName ?? q.partnerCompany.legalName
+        : null,
+    }));
+    panelTasks = taskRows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      category: t.category,
+      status: t.status,
+      startAt: t.startAt,
+      durationMinutes: t.durationMinutes,
+      startedAt: t.startedAt,
+      completedAt: t.completedAt,
+      assigneeKind: t.assigneeKind,
+      assigneeEmployeeId: t.assigneeEmployeeId,
+      assigneePartnerId: t.assigneePartnerId,
+      assigneeName:
+        t.assigneeEmployee?.name ??
+        (t.assigneePartner
+          ? t.assigneePartner.name +
+            (t.assigneePartner.company
+              ? ` (${t.assigneePartner.company.commercialName ?? t.assigneePartner.company.legalName})`
+              : "")
+          : null),
+      vehicleId: t.vehicleId,
+      vehiclePlate: t.vehicle?.plate ?? null,
+      notes: t.notes,
+    }));
+    employeeOptions = employees.map((e) => ({
+      id: e.id,
+      name: e.name,
+      role: e.role,
+    }));
+    vehicleOptions = vehiclesRows.map((v) => ({
+      id: v.id,
+      plate: v.plate,
+      label: [v.plate, v.brand, v.model].filter(Boolean).join(" · "),
+    }));
+  }
 
   const ref = l.id.slice(-8).toUpperCase();
   const maptilerKey = env.maptilerApiKey();
@@ -90,7 +286,7 @@ export default async function CarrierLeadDetailPage({ params }: PageProps) {
   if (l.shared) pills.push({ k: "Shared", v: "Ναι" });
 
   return (
-    <div className="mx-auto w-full max-w-[1320px] px-4 py-3 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1440px] px-4 py-3 sm:px-5">
       {/* Top bar — single line */}
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         <Link
@@ -171,9 +367,9 @@ export default async function CarrierLeadDetailPage({ params }: PageProps) {
       </div>
 
       {/* 2-pane layout */}
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-3 lg:grid-cols-[1fr_340px]">
         {/* MAIN */}
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-2.5">
           {/* Property pills */}
           {pills.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -195,20 +391,17 @@ export default async function CarrierLeadDetailPage({ params }: PageProps) {
           )}
 
           {/* Items — accordion */}
-          <details className="group rounded-lg border border-border bg-card">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 hover:bg-secondary/30">
-              <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide">
-                <span className="grid size-5 place-items-center rounded bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]">
-                  <Package className="size-3" />
-                </span>
-                <span className="text-foreground">Αντικείμενα</span>
-                <span className="text-muted-foreground">
-                  · {l.itemsCount} τεμ · {l.totalVolumeM3.toFixed(1)} m³
-                </span>
+          <details open className="group cx-card">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 px-3 cx-transition hover:bg-[var(--cx-hover)] [&::-webkit-details-marker]:hidden">
+              <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground cx-transition group-open:rotate-0" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground">
+                Αντικείμενα
               </span>
-              <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+              <span className="text-[11px] text-muted-foreground">
+                · {l.itemsCount} τεμ · {l.totalVolumeM3.toFixed(1)} m³
+              </span>
             </summary>
-            <ul className="divide-y divide-border border-t border-border">
+            <ul className="max-h-[268px] divide-y divide-border overflow-y-auto border-t border-border [scrollbar-width:thin]">
               {l.items.map((it, i) => (
                 <li
                   key={i}
@@ -244,49 +437,134 @@ export default async function CarrierLeadDetailPage({ params }: PageProps) {
 
           {/* Map — accordion */}
           {maptilerKey && (
-            <details className="group rounded-lg border border-border bg-card">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 hover:bg-secondary/30">
-                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide">
-                  <span className="grid size-5 place-items-center rounded bg-sky-100 text-sky-700">
-                    <MapPin className="size-3" />
-                  </span>
-                  <span className="text-foreground">Χάρτης διαδρομής</span>
+            <details open className="group cx-card">
+              <summary className="flex h-9 cursor-pointer list-none items-center gap-2 px-3 cx-transition hover:bg-[var(--cx-hover)] [&::-webkit-details-marker]:hidden">
+                <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground cx-transition group-open:rotate-0" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground">
+                  Χάρτης διαδρομής
                 </span>
-                <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
               </summary>
               <div className="border-t border-border p-2">
                 <RequestMap apiKey={maptilerKey} stops={routeStops} />
               </div>
             </details>
           )}
+
+          {/* Gantt — μεταφέρθηκε εδώ για να γεμίσει τον χώρο κάτω από τον χάρτη */}
+          {membership && (
+            <TasksPanel
+              moveRequestId={l.id}
+              tasks={panelTasks}
+              employees={employeeOptions}
+              partners={taskPartnerOptions}
+              vehicles={vehicleOptions}
+            />
+          )}
         </div>
 
         {/* RIGHT — sticky offer form */}
-        <aside className="lg:sticky lg:top-4 lg:self-start">
-          <div className="overflow-hidden rounded-lg border-2 border-[var(--color-brand-blue)]/30 bg-card shadow-[0_4px_16px_rgba(37,99,235,0.08)]">
-            <div className="border-b border-[var(--color-brand-blue)]/30 bg-gradient-to-r from-[var(--color-brand-blue-light)] to-card px-4 py-2.5">
-              <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-blue-deep)]">
-                <span className="grid size-5 place-items-center rounded bg-[var(--color-brand-blue)] text-white">
-                  €
-                </span>
+        <aside className="flex flex-col gap-2.5 lg:sticky lg:top-3 lg:self-start">
+          {/* Contract block — shown when offer accepted */}
+          {l.myOffer?.status === "ACCEPTED" && l.myOffer.contractPdfUrl && (
+            <div className="cx-card overflow-hidden ring-1 ring-emerald-300">
+              <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                <h2 className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-emerald-900">
+                  <CheckCircle2 className="size-3.5" />
+                  Συμφωνητικό
+                  {l.myOffer.contractRef && (
+                    <span className="ml-auto font-mono text-[9px] text-emerald-700">
+                      {l.myOffer.contractRef}
+                    </span>
+                  )}
+                </h2>
+              </div>
+              <div className="p-3">
+                {l.myOffer.acceptedSlotAt && (
+                  <p className="mb-3 text-xs font-semibold text-emerald-900">
+                    Συμφωνημένη ώρα:{" "}
+                    {new Intl.DateTimeFormat("el-GR", {
+                      weekday: "long",
+                      day: "2-digit",
+                      month: "long",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(new Date(l.myOffer.acceptedSlotAt))}
+                  </p>
+                )}
+                <div className="flex flex-col gap-2">
+                  <a
+                    href={l.myOffer.contractPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700"
+                  >
+                    <FileText className="size-4" />
+                    Άνοιγμα PDF
+                  </a>
+                  {l.myOffer.contractDocxUrl && (
+                    <a
+                      href={l.myOffer.contractDocxUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-4 text-xs font-semibold text-emerald-800 hover:bg-emerald-50"
+                    >
+                      <Download className="size-3.5" />
+                      Κατέβασμα .docx
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="cx-card overflow-hidden ring-1 ring-[var(--cx-accent)]/30">
+            <div className="border-b border-border bg-[var(--cx-accent-soft)] px-3 py-1.5">
+              <h2 className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground">
                 Η προσφορά σου
                 {l.myOffer && (
-                  <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-900">
+                  <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-900 ring-1 ring-inset ring-amber-200">
                     Ενεργή
                   </span>
                 )}
               </h2>
             </div>
-            <div className="p-4">
+            <div className="p-3">
               <OfferForm
                 moveRequestId={l.id}
                 existing={l.myOffer ?? undefined}
                 estimateMin={l.estimatedPriceMinCents}
                 estimateMax={l.estimatedPriceMaxCents}
                 vehicles={vehicles}
+                suggestedPriceEur={matchPriceEur && matchPriceEur > 0 ? matchPriceEur : null}
               />
             </div>
           </div>
+
+          {membership && (
+            <PartnerQuoteSection
+              moveRequestId={l.id}
+              partners={partnerOptions}
+              companies={companyOptions}
+              contacts={contactOptions}
+              acceptedSlotAt={l.myOffer?.acceptedSlotAt ?? null}
+              requests={quoteRequests}
+              unassignedTasks={panelTasks
+                .filter((t) => t.assigneeKind === "UNASSIGNED" && t.status !== "CANCELLED" && t.status !== "DONE")
+                .map((t) => ({
+                  id: t.id,
+                  title: t.title,
+                  category: t.category,
+                  startAt: typeof t.startAt === "string" ? t.startAt : t.startAt.toISOString(),
+                  durationMinutes: t.durationMinutes,
+                }))}
+              assignablePartners={taskPartnerOptions.map((p) => ({
+                id: p.id,
+                name: p.name,
+                kind: p.kind,
+                companyName: p.companyName,
+              }))}
+            />
+          )}
         </aside>
       </div>
     </div>

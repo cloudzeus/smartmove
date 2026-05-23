@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  // pdfkit ships .afm font-metric data files and wawoff2 is a wasm-compiled
+  // decoder — both need to be loaded from node_modules at runtime, not bundled.
+  serverExternalPackages: ["pdfkit", "wawoff2"],
 };
 
 export default withNextIntl(nextConfig);

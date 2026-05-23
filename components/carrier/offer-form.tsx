@@ -3,19 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CalendarClock,
   Check,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Euro,
   Loader2,
-  Plus,
   Sparkles,
-  Sun,
-  Sunrise,
-  Sunset,
   Trash2,
   Truck,
-  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -27,10 +22,46 @@ import {
 } from "@/server/actions/carrier-leads.action";
 import type { OfferPricingBreakdown } from "@/lib/offer-pricing";
 
-type Period = "MORNING" | "AFTERNOON" | "EVENING";
+const SLOT_HOUR_MIN = 7;
+const SLOT_HOUR_MAX = 20;
+const HOURS = Array.from(
+  { length: SLOT_HOUR_MAX - SLOT_HOUR_MIN + 1 },
+  (_, i) => SLOT_HOUR_MIN + i,
+);
+
 interface ProposedSlot {
   date: string;
-  period: Period;
+  hour: number;
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(iso: string, n: number): string {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatLongDate(iso: string): string {
+  return new Intl.DateTimeFormat("el-GR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(new Date(iso + "T00:00:00"));
+}
+
+function formatShortDate(iso: string): string {
+  return new Intl.DateTimeFormat("el-GR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  }).format(new Date(iso + "T00:00:00"));
+}
+
+function hourLabel(h: number): string {
+  return `${String(h).padStart(2, "0")}:00`;
 }
 
 interface ExistingOffer {
@@ -49,6 +80,8 @@ interface Props {
   estimateMin: number | null;
   estimateMax: number | null;
   vehicles: CarrierVehicleOption[];
+  /** Pre-fill from ?matchPrice query (carrier clicks "match competitor"). */
+  suggestedPriceEur?: number | null;
 }
 
 export function OfferForm({
@@ -57,6 +90,7 @@ export function OfferForm({
   estimateMin,
   estimateMax,
   vehicles,
+  suggestedPriceEur,
 }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -64,9 +98,13 @@ export function OfferForm({
     { ok: true; msg: string } | { ok: false; msg: string } | null
   >(null);
 
-  const [priceEur, setPriceEur] = useState<string>(
-    existing ? String(Math.round(existing.priceCents / 100)) : "",
-  );
+  const [priceEur, setPriceEur] = useState<string>(() => {
+    if (suggestedPriceEur && suggestedPriceEur > 0) {
+      // Subtract €1 to undercut competitor by default (carrier can edit).
+      return String(Math.max(1, suggestedPriceEur - 1));
+    }
+    return existing ? String(Math.round(existing.priceCents / 100)) : "";
+  });
   const [estimatedDays, setEstimatedDays] = useState<string>(
     existing?.estimatedDays != null ? String(existing.estimatedDays) : "",
   );
@@ -76,8 +114,25 @@ export function OfferForm({
   const [slots, setSlots] = useState<ProposedSlot[]>(
     existing?.proposedSlots ?? [],
   );
-  const [newSlotDate, setNewSlotDate] = useState<string>("");
-  const [newSlotPeriod, setNewSlotPeriod] = useState<Period>("MORNING");
+  const [activeDate, setActiveDate] = useState<string>(() => {
+    const first = existing?.proposedSlots?.[0]?.date;
+    return first ?? todayIso();
+  });
+
+  const toggleSlot = (date: string, hour: number) => {
+    setSlots((prev) => {
+      const has = prev.some((s) => s.date === date && s.hour === hour);
+      if (has) return prev.filter((s) => !(s.date === date && s.hour === hour));
+      return [...prev, { date, hour }].sort((a, b) =>
+        a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1,
+      );
+    });
+  };
+
+  const activeDaySlots = slots
+    .filter((s) => s.date === activeDate)
+    .map((s) => s.hour);
+  const daysWithSlots = Array.from(new Set(slots.map((s) => s.date))).sort();
   const [suggestion, setSuggestion] = useState<OfferPricingBreakdown | null>(
     null,
   );
@@ -281,68 +336,134 @@ export function OfferForm({
         />
       </Field>
 
-      <Field label="Διαθέσιμα slots για τον πελάτη">
-        {slots.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground">
-            Δεν έχεις προτείνει slots. Πρόσθεσε από κάτω.
-          </p>
-        ) : (
-          <ul className="flex flex-wrap gap-1.5">
-            {slots.map((s, i) => (
-              <li key={`${s.date}-${s.period}-${i}`}>
-                <button
-                  type="button"
-                  onClick={() => setSlots(slots.filter((_, idx) => idx !== i))}
-                  className="group inline-flex items-center gap-1.5 rounded-md border border-[var(--color-brand-blue)]/30 bg-[var(--color-brand-blue-light)] px-2 py-1 text-[11px] font-semibold text-[var(--color-brand-blue-deep)] hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
-                >
-                  {PeriodIcon(s.period)}
-                  {formatSlotShort(s.date)} · {periodLabel(s.period)}
-                  <X className="size-3 opacity-50 group-hover:opacity-100" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="mt-2 flex gap-1.5">
-          <input
-            type="date"
-            value={newSlotDate}
-            min={new Date().toISOString().slice(0, 10)}
-            onChange={(e) => setNewSlotDate(e.target.value)}
-            className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-[var(--color-brand-blue)]"
-          />
-          <select
-            value={newSlotPeriod}
-            onChange={(e) => setNewSlotPeriod(e.target.value as Period)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-[var(--color-brand-blue)]"
-          >
-            <option value="MORNING">Πρωί</option>
-            <option value="AFTERNOON">Μεσημέρι</option>
-            <option value="EVENING">Απόγευμα</option>
-          </select>
+      <Field label={`Διαθέσιμα slots (${slots.length} επιλεγμένα)`}>
+        <p className="text-[11px] text-muted-foreground">
+          Διάλεξε ημέρα και πάτησε όσες ώρες σε βολεύουν. Ο πελάτης θα δει όλα
+          τα slots και θα επιλέξει ένα.
+        </p>
+
+        {/* Day picker */}
+        <div className="mt-2 flex items-center gap-1.5">
           <button
             type="button"
-            disabled={!newSlotDate}
-            onClick={() => {
-              if (!newSlotDate) return;
-              if (
-                slots.some(
-                  (s) => s.date === newSlotDate && s.period === newSlotPeriod,
-                )
-              )
-                return;
-              setSlots([
-                ...slots,
-                { date: newSlotDate, period: newSlotPeriod },
-              ]);
-              setNewSlotDate("");
-            }}
-            className="inline-flex h-8 items-center gap-1 rounded-md bg-foreground px-2.5 text-[11px] font-bold text-background disabled:opacity-50"
+            onClick={() => setActiveDate((d) => addDays(d, -1))}
+            disabled={activeDate <= todayIso()}
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-secondary disabled:opacity-40"
+            aria-label="Προηγούμενη ημέρα"
           >
-            <Plus className="size-3.5" />
-            Add
+            <ChevronLeft className="size-4" />
+          </button>
+          <input
+            type="date"
+            value={activeDate}
+            min={todayIso()}
+            onChange={(e) => setActiveDate(e.target.value || todayIso())}
+            className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm font-semibold capitalize outline-none focus:border-[var(--color-brand-blue)]"
+          />
+          <button
+            type="button"
+            onClick={() => setActiveDate((d) => addDays(d, 1))}
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-secondary"
+            aria-label="Επόμενη ημέρα"
+          >
+            <ChevronRight className="size-4" />
           </button>
         </div>
+        <p className="mt-1 text-[11px] capitalize text-foreground">
+          {formatLongDate(activeDate)}
+        </p>
+
+        {/* Hour pills 07-20 — compact */}
+        <div className="mt-1.5 grid grid-cols-5 gap-1 sm:grid-cols-7">
+          {HOURS.map((h) => {
+            const on = activeDaySlots.includes(h);
+            return (
+              <button
+                key={h}
+                type="button"
+                onClick={() => toggleSlot(activeDate, h)}
+                aria-pressed={on}
+                className={cn(
+                  "h-6 rounded-sm border text-[10px] font-semibold tabular-nums cx-transition cx-press focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  on
+                    ? "border-[var(--cx-accent)] bg-[var(--cx-accent)] text-primary-foreground"
+                    : "border-border bg-background text-foreground hover:border-[var(--cx-accent)]/40 hover:bg-[var(--cx-accent-soft)]",
+                )}
+              >
+                {hourLabel(h)}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Quick actions */}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              const filtered = slots.filter((s) => s.date !== activeDate);
+              const adds = HOURS.map((h) => ({ date: activeDate, hour: h }));
+              setSlots(
+                [...filtered, ...adds].sort((a, b) =>
+                  a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1,
+                ),
+              );
+            }}
+            className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2 text-[11px] font-semibold text-foreground hover:bg-secondary"
+          >
+            Όλη η μέρα
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setSlots(slots.filter((s) => s.date !== activeDate))
+            }
+            disabled={activeDaySlots.length === 0}
+            className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2 text-[11px] font-semibold text-muted-foreground hover:bg-secondary disabled:opacity-40"
+          >
+            Καθαρισμός ημέρας
+          </button>
+        </div>
+
+        {/* Multi-day summary */}
+        {daysWithSlots.length > 0 && (
+          <div className="mt-3 rounded-lg border border-border bg-secondary/30 p-2">
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              Σύνοψη ({slots.length} ώρες σε {daysWithSlots.length}{" "}
+              {daysWithSlots.length === 1 ? "ημέρα" : "ημέρες"})
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {daysWithSlots.map((d) => {
+                const hours = slots
+                  .filter((s) => s.date === d)
+                  .map((s) => s.hour)
+                  .sort((a, b) => a - b);
+                return (
+                  <li
+                    key={d}
+                    className="flex flex-wrap items-center gap-1.5 text-[11px]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveDate(d)}
+                      className={cn(
+                        "rounded-md px-1.5 py-0.5 font-semibold capitalize",
+                        d === activeDate
+                          ? "bg-[var(--color-brand-blue)] text-white"
+                          : "bg-background text-foreground hover:bg-secondary",
+                      )}
+                    >
+                      {formatShortDate(d)}
+                    </button>
+                    <span className="font-mono tabular-nums text-muted-foreground">
+                      {hours.map(hourLabel).join(", ")}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </Field>
 
       <Field label="Ισχύς προσφοράς">
@@ -378,11 +499,24 @@ export function OfferForm({
         </p>
       )}
 
+      {slots.length === 0 && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+          <strong>Πρέπει να προτείνεις τουλάχιστον ένα slot.</strong> Ο πελάτης θα
+          επιλέξει μία από τις ώρες που του προσφέρεις — δεν μπορεί να αποδεχθεί
+          προσφορά χωρίς διαθεσιμότητα.
+        </p>
+      )}
+
       <button
         type="button"
-        disabled={pending || !priceEur || Number(priceEur) <= 0}
+        disabled={
+          pending ||
+          !priceEur ||
+          Number(priceEur) <= 0 ||
+          slots.length === 0
+        }
         onClick={submit}
-        className="mt-1 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[var(--color-brand-blue)] to-[#3B82F6] px-5 text-sm font-bold text-white shadow-[0_6px_20px_rgba(37,99,235,0.25)] hover:from-[var(--color-brand-blue-deep)] hover:to-[var(--color-brand-blue)] disabled:opacity-50"
+        className="mt-1 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[var(--color-brand-blue)] to-[#3B82F6] px-5 text-sm font-bold text-white shadow-[0_6px_20px_rgba(37,99,235,0.25)] hover:from-[var(--color-brand-blue-deep)] hover:to-[var(--color-brand-blue)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending ? (
           <Loader2 className="size-4 animate-spin" />
@@ -432,33 +566,3 @@ function formatDate(d: Date): string {
   }).format(d);
 }
 
-function formatSlotShort(date: string): string {
-  const d = new Date(date);
-  return new Intl.DateTimeFormat("el-GR", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-  }).format(d);
-}
-
-function periodLabel(p: Period): string {
-  switch (p) {
-    case "MORNING":
-      return "Πρωί";
-    case "AFTERNOON":
-      return "Μεσ.";
-    case "EVENING":
-      return "Απόγ.";
-  }
-}
-
-function PeriodIcon(p: Period) {
-  switch (p) {
-    case "MORNING":
-      return <Sunrise className="size-3" />;
-    case "AFTERNOON":
-      return <Sun className="size-3" />;
-    case "EVENING":
-      return <Sunset className="size-3" />;
-  }
-}

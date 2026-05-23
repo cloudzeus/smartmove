@@ -1,16 +1,6 @@
-import Link from "next/link";
-import {
-  ArrowRight,
-  Inbox,
-  Receipt,
-  Star,
-  Truck,
-  Wallet,
-} from "lucide-react";
-
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { EmptyState } from "@/components/dashboard/empty-state";
+import { CarrierDashboardClient } from "@/components/carrier/dashboard-client";
 
 export const metadata = { title: "Πίνακας μεταφορέα" };
 export const dynamic = "force-dynamic";
@@ -21,292 +11,495 @@ export default async function CarrierOverviewPage() {
 
   const membership = await db.tenantMembership.findFirst({
     where: { userId },
-    select: { tenantId: true },
+    select: { tenantId: true, role: true },
     orderBy: { createdAt: "asc" },
   });
 
-  const [openLeads, myOffers, activeJobs, payments, reviews, recentLeads, recentOffers] =
-    await Promise.all([
-      db.moveRequest.count({ where: { status: "PUBLISHED" } }),
-      db.offer.count({ where: { carrierUserId: userId, status: "OPEN" } }),
-      db.moveRequest.count({
-        where: {
-          status: "AWARDED",
-          offers: { some: { carrierUserId: userId, status: "ACCEPTED" } },
-        },
-      }),
-      db.payment.aggregate({
-        _sum: { amountCents: true },
-        where: { status: "CAPTURED", offer: { carrierUserId: userId } },
-      }),
-      db.review.aggregate({
-        _avg: { rating: true },
-        _count: { _all: true },
-        where: { carrierUserId: userId },
-      }),
-      db.moveRequest.findMany({
-        where: { status: "PUBLISHED" },
-        orderBy: { createdAt: "desc" },
-        take: 6,
-        select: {
-          id: true,
-          fromAddress: true,
-          toAddress: true,
-          createdAt: true,
-          type: true,
-          itemsCount: true,
-          totalVolumeM3: true,
-        },
-      }),
-      db.offer.findMany({
-        where: { carrierUserId: userId },
-        orderBy: { createdAt: "desc" },
-        take: 6,
-        include: {
-          moveRequest: {
-            select: { fromAddress: true, toAddress: true },
-          },
-        },
-      }),
-    ]);
+  const now = new Date();
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setHours(23, 59, 59, 999);
+  const startOfWeek = new Date(startOfDay);
+  startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay() + 1); // Monday
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  const startOfPrev7d = new Date(now.getTime() - 7 * 86400000);
+  const startOfPrev30d = new Date(now.getTime() - 30 * 86400000);
+  const startOfPrev60d = new Date(now.getTime() - 60 * 86400000);
+  const expiringSoon = new Date(now.getTime() + 48 * 3600 * 1000);
+  const tenantId = membership?.tenantId ?? null;
 
-  const earningsEur = (payments._sum.amountCents ?? 0) / 100;
-  const avgRating = reviews._avg.rating ?? 0;
+  const [
+    openLeadsCount,
+    openOffersCount,
+    activeProjects,
+    completedProjects,
+    payments30d,
+    paymentsPrev30d,
+    paymentsAllTime,
+    reviewsAgg,
+    expiringOffers,
+    recentLeads,
+    recentOffers,
+    pendingConfirmTasks,
+    declinedTasks,
+    todaysTasks,
+    weekTasks,
+    pendingQuoteCampaigns,
+    employeeWorkload,
+    fleetCount,
+    employeesCount,
+    partnersCount,
+  ] = await Promise.all([
+    db.moveRequest.count({
+      where: {
+        status: "PUBLISHED",
+        offers: { none: { carrierUserId: userId } },
+      },
+    }),
+    db.offer.count({ where: { carrierUserId: userId, status: "OPEN" } }),
+    tenantId
+      ? db.carrierProject.findMany({
+          where: {
+            tenantId,
+            status: { in: ["PLANNED", "IN_PROGRESS", "DRAFT"] },
+          },
+          orderBy: { scheduledStart: "asc" },
+          take: 8,
+          select: {
+            id: true,
+            code: true,
+            status: true,
+            scheduledStart: true,
+            totalPriceCents: true,
+            moveRequest: {
+              select: {
+                fromAddress: true,
+                toAddress: true,
+                user: { select: { name: true, email: true } },
+              },
+            },
+            stops: { select: { id: true } },
+          },
+        })
+      : Promise.resolve([]),
+    tenantId
+      ? db.carrierProject.count({
+          where: { tenantId, status: "COMPLETED" },
+        })
+      : Promise.resolve(0),
+    db.payment.aggregate({
+      _sum: { amountCents: true },
+      where: {
+        status: "CAPTURED",
+        offer: { carrierUserId: userId },
+        createdAt: { gte: startOfPrev30d },
+      },
+    }),
+    db.payment.aggregate({
+      _sum: { amountCents: true },
+      where: {
+        status: "CAPTURED",
+        offer: { carrierUserId: userId },
+        createdAt: { gte: startOfPrev60d, lt: startOfPrev30d },
+      },
+    }),
+    db.payment.aggregate({
+      _sum: { amountCents: true },
+      where: { status: "CAPTURED", offer: { carrierUserId: userId } },
+    }),
+    db.review.aggregate({
+      _avg: { rating: true },
+      _count: { _all: true },
+      where: { carrierUserId: userId },
+    }),
+    db.offer.findMany({
+      where: {
+        carrierUserId: userId,
+        status: "OPEN",
+        validUntil: { lte: expiringSoon, gte: now },
+      },
+      orderBy: { validUntil: "asc" },
+      take: 5,
+      include: {
+        moveRequest: {
+          select: { id: true, fromAddress: true, toAddress: true },
+        },
+      },
+    }),
+    db.moveRequest.findMany({
+      where: {
+        status: "PUBLISHED",
+        offers: { none: { carrierUserId: userId } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      select: {
+        id: true,
+        fromAddress: true,
+        toAddress: true,
+        createdAt: true,
+        type: true,
+        itemsCount: true,
+        totalVolumeM3: true,
+        preferredDate: true,
+        estimatedPriceMinCents: true,
+        estimatedPriceMaxCents: true,
+      },
+    }),
+    db.offer.findMany({
+      where: { carrierUserId: userId, status: "OPEN" },
+      orderBy: { validUntil: "asc" },
+      take: 6,
+      include: {
+        moveRequest: {
+          select: { id: true, fromAddress: true, toAddress: true },
+        },
+      },
+    }),
+    tenantId
+      ? db.jobTask.findMany({
+          where: {
+            tenantId,
+            assigneeConfirmationStatus: "PENDING",
+          },
+          orderBy: { startAt: "asc" },
+          take: 10,
+          select: {
+            id: true,
+            title: true,
+            startAt: true,
+            durationMinutes: true,
+            assigneeConfirmationSentAt: true,
+            assigneeEmployee: { select: { name: true } },
+            assigneePartner: { select: { name: true } },
+            projectStopService: {
+              select: {
+                projectStop: {
+                  select: {
+                    project: { select: { id: true, code: true } },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    tenantId
+      ? db.jobTask.findMany({
+          where: {
+            tenantId,
+            assigneeConfirmationStatus: "DECLINED",
+            status: { notIn: ["CANCELLED", "DONE"] },
+          },
+          orderBy: { startAt: "asc" },
+          take: 10,
+          select: {
+            id: true,
+            title: true,
+            startAt: true,
+            durationMinutes: true,
+            assigneeDeclineReason: true,
+            assigneeEmployee: { select: { name: true } },
+            assigneePartner: { select: { name: true } },
+            projectStopService: {
+              select: {
+                projectStop: {
+                  select: {
+                    project: { select: { id: true, code: true } },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    tenantId
+      ? db.jobTask.findMany({
+          where: {
+            tenantId,
+            startAt: { gte: startOfDay, lte: endOfDay },
+            status: { notIn: ["CANCELLED"] },
+          },
+          orderBy: { startAt: "asc" },
+          take: 50,
+          select: {
+            id: true,
+            title: true,
+            startAt: true,
+            durationMinutes: true,
+            status: true,
+            assigneeKind: true,
+            assigneeConfirmationStatus: true,
+            assigneeEmployee: { select: { name: true } },
+            assigneePartner: { select: { name: true } },
+            projectStopService: {
+              select: {
+                serviceType: true,
+                projectStop: {
+                  select: {
+                    address: true,
+                    project: { select: { id: true, code: true } },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    tenantId
+      ? db.jobTask.findMany({
+          where: {
+            tenantId,
+            startAt: { gte: startOfWeek, lt: endOfWeek },
+            status: { notIn: ["CANCELLED"] },
+          },
+          orderBy: { startAt: "asc" },
+          select: {
+            id: true,
+            title: true,
+            startAt: true,
+            durationMinutes: true,
+            status: true,
+            assigneeEmployee: { select: { id: true, name: true } },
+            assigneePartner: { select: { id: true, name: true } },
+            projectStopService: {
+              select: {
+                serviceType: true,
+                projectStop: {
+                  select: { project: { select: { id: true, code: true } } },
+                },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    tenantId
+      ? db.partnerQuoteRequest.findMany({
+          where: {
+            tenantId,
+            projectStopServiceId: { not: null },
+            status: { in: ["PENDING", "QUOTED"] },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: {
+            id: true,
+            status: true,
+            recipientName: true,
+            quotedPriceCents: true,
+            createdAt: true,
+            scheduledStartAt: true,
+            partner: { select: { name: true } },
+            projectStopService: {
+              select: {
+                serviceType: true,
+                projectStop: {
+                  select: {
+                    project: { select: { id: true, code: true } },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    tenantId
+      ? db.carrierEmployee.findMany({
+          where: { tenantId, deletedAt: null, active: true },
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            _count: {
+              select: {
+                jobTasks: {
+                  where: {
+                    startAt: { gte: startOfWeek, lt: endOfWeek },
+                    status: { notIn: ["CANCELLED"] },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    tenantId
+      ? db.vehicle.count({ where: { tenantId, deletedAt: null } })
+      : Promise.resolve(0),
+    tenantId
+      ? db.carrierEmployee.count({
+          where: { tenantId, deletedAt: null, active: true },
+        })
+      : Promise.resolve(0),
+    tenantId
+      ? db.carrierPartner.count({
+          where: { tenantId, deletedAt: null },
+        })
+      : Promise.resolve(0),
+  ]);
+
+  const [recentNotifications, unreadNotifications] = tenantId
+    ? await Promise.all([
+        db.notification.findMany({
+          where: { tenantId, status: { not: "ARCHIVED" } },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+          select: {
+            id: true, type: true, severity: true, status: true,
+            title: true, body: true, href: true, createdAt: true,
+          },
+        }),
+        db.notification.count({
+          where: { tenantId, status: "UNREAD" },
+        }),
+      ])
+    : [[], 0] as const;
+
+  const revenue30d = (payments30d._sum.amountCents ?? 0) / 100;
+  const revenuePrev30d = (paymentsPrev30d._sum.amountCents ?? 0) / 100;
+  const revenueAllTime = (paymentsAllTime._sum.amountCents ?? 0) / 100;
+  const revenueDeltaPct =
+    revenuePrev30d > 0
+      ? ((revenue30d - revenuePrev30d) / revenuePrev30d) * 100
+      : revenue30d > 0
+        ? 100
+        : 0;
+  const avgRating = reviewsAgg._avg.rating ?? 0;
+  const reviewCount = reviewsAgg._count._all ?? 0;
+  const firstName =
+    (session!.user.name ?? session!.user.email ?? "").split(/[\s@]/)[0] || "";
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      {/* Header — compact, no big hero */}
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-            Marketplace
-          </p>
-          <h1 className="font-display text-2xl font-bold text-foreground">
-            Καλώς ήρθες
-          </h1>
-        </div>
-        <Link
-          href="/carrier/leads"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--color-brand-blue)] px-4 text-sm font-bold text-white shadow-[var(--shadow-cta)] hover:bg-[var(--color-brand-blue-deep)]"
-        >
-          <Inbox className="size-4" />
-          Δες αιτήματα
-        </Link>
-      </div>
-
-      {!membership && (
-        <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm font-bold text-amber-900">
-            Δεν είσαι ακόμα συνδεδεμένος με εταιρεία
-          </p>
-          <p className="mt-0.5 text-xs text-amber-800">
-            Ζήτησε από έναν admin να σε προσθέσει σε ένα tenant.
-          </p>
-        </div>
-      )}
-
-      {/* Compact KPI strip — 4 inline tiles, one row */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatTile
-          icon={Inbox}
-          label="Νέα αιτήματα"
-          value={openLeads}
-          accent="blue"
-          href="/carrier/leads"
-        />
-        <StatTile
-          icon={Receipt}
-          label="Ανοιχτές προσφορές"
-          value={myOffers}
-          accent="amber"
-          href="/carrier/offers"
-        />
-        <StatTile
-          icon={Truck}
-          label="Σε εξέλιξη"
-          value={activeJobs}
-          accent="emerald"
-          href="/carrier/jobs"
-        />
-        <StatTile
-          icon={Wallet}
-          label="Έσοδα"
-          value={earningsEur > 0 ? `${earningsEur.toFixed(0)}€` : "—"}
-          accent="violet"
-          subline={
-            reviews._count._all > 0
-              ? `${avgRating.toFixed(1)} ★ · ${reviews._count._all} reviews`
-              : undefined
-          }
-        />
-      </div>
-
-      {/* Two-column actionable lists */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <section className="rounded-2xl border border-border bg-card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-base font-bold text-foreground">
-              Φρέσκα αιτήματα
-            </h2>
-            <Link
-              href="/carrier/leads"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-brand-blue)] hover:text-[var(--color-brand-blue-deep)]"
-            >
-              Όλα <ArrowRight className="size-3" />
-            </Link>
-          </div>
-          {recentLeads.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Δεν υπάρχουν νέα αιτήματα.
-            </p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-border">
-              {recentLeads.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    href={`/carrier/leads/${r.id}`}
-                    className="flex items-center justify-between gap-3 py-2.5 hover:bg-secondary/40 -mx-2 px-2 rounded-md transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {r.fromAddress.split(",")[1]?.trim() || r.fromAddress}{" "}
-                        → {r.toAddress.split(",")[1]?.trim() || r.toAddress}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {r.itemsCount} τεμ · {r.totalVolumeM3.toFixed(1)} m³ ·{" "}
-                        {relativeTime(r.createdAt)}
-                      </p>
-                    </div>
-                    <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-border bg-card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-base font-bold text-foreground">
-              Πρόσφατες προσφορές μου
-            </h2>
-            <Link
-              href="/carrier/offers"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-brand-blue)] hover:text-[var(--color-brand-blue-deep)]"
-            >
-              Όλες <ArrowRight className="size-3" />
-            </Link>
-          </div>
-          {recentOffers.length === 0 ? (
-            <EmptyState
-              icon={Receipt}
-              title="Καμία προσφορά ακόμα"
-              description="Όταν στείλεις την πρώτη σου προσφορά, θα εμφανίζεται εδώ."
-              cta={{ label: "Δες αιτήματα", href: "/carrier/leads" }}
-            />
-          ) : (
-            <ul className="flex flex-col divide-y divide-border">
-              {recentOffers.map((o) => (
-                <li key={o.id}>
-                  <Link
-                    href={`/carrier/leads/${o.moveRequestId}`}
-                    className="flex items-center justify-between gap-3 py-2.5 hover:bg-secondary/40 -mx-2 px-2 rounded-md transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {o.moveRequest.fromAddress.split(",")[1]?.trim() ||
-                          o.moveRequest.fromAddress}{" "}
-                        →{" "}
-                        {o.moveRequest.toAddress.split(",")[1]?.trim() ||
-                          o.moveRequest.toAddress}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {statusLabel(o.status)} · {relativeTime(o.createdAt)}
-                      </p>
-                    </div>
-                    <span className="font-display text-base font-bold tabular-nums text-[var(--color-brand-blue-deep)]">
-                      {(o.priceCents / 100).toFixed(0)}€
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </div>
+    <CarrierDashboardClient
+      firstName={firstName}
+      hasMembership={!!membership}
+      kpis={{
+        openLeads: openLeadsCount,
+        openOffers: openOffersCount,
+        activeProjectsCount: activeProjects.length,
+        completedProjects,
+        revenue30d,
+        revenuePrev30d,
+        revenueAllTime,
+        revenueDeltaPct,
+        avgRating,
+        reviewCount,
+        fleetCount,
+        employeesCount,
+        partnersCount,
+      }}
+      pendingConfirmTasks={pendingConfirmTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        startAt: t.startAt.toISOString(),
+        durationMinutes: t.durationMinutes,
+        assigneeName: t.assigneeEmployee?.name ?? t.assigneePartner?.name ?? "—",
+        sentAt: t.assigneeConfirmationSentAt?.toISOString() ?? null,
+        projectId: t.projectStopService?.projectStop.project.id ?? null,
+        projectCode: t.projectStopService?.projectStop.project.code ?? null,
+      }))}
+      declinedTasks={declinedTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        startAt: t.startAt.toISOString(),
+        assigneeName: t.assigneeEmployee?.name ?? t.assigneePartner?.name ?? "—",
+        reason: t.assigneeDeclineReason,
+        projectId: t.projectStopService?.projectStop.project.id ?? null,
+        projectCode: t.projectStopService?.projectStop.project.code ?? null,
+      }))}
+      expiringOffers={expiringOffers.map((o) => ({
+        id: o.id,
+        moveRequestId: o.moveRequestId,
+        priceCents: o.priceCents,
+        validUntil: o.validUntil.toISOString(),
+        route: `${o.moveRequest.fromAddress} → ${o.moveRequest.toAddress}`,
+      }))}
+      todaysTasks={todaysTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        startAt: t.startAt.toISOString(),
+        durationMinutes: t.durationMinutes,
+        status: t.status,
+        confirmStatus: t.assigneeConfirmationStatus,
+        assigneeName: t.assigneeEmployee?.name ?? t.assigneePartner?.name ?? null,
+        serviceType: t.projectStopService?.serviceType ?? "OTHER",
+        address: t.projectStopService?.projectStop.address ?? "",
+        projectId: t.projectStopService?.projectStop.project.id ?? null,
+        projectCode: t.projectStopService?.projectStop.project.code ?? null,
+      }))}
+      weekTasks={weekTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        startAt: t.startAt.toISOString(),
+        durationMinutes: t.durationMinutes,
+        status: t.status,
+        assigneeEmployeeId: t.assigneeEmployee?.id ?? null,
+        assigneePartnerId: t.assigneePartner?.id ?? null,
+        assigneeName: t.assigneeEmployee?.name ?? t.assigneePartner?.name ?? null,
+        serviceType: t.projectStopService?.serviceType ?? "OTHER",
+        projectId: t.projectStopService?.projectStop.project.id ?? null,
+        projectCode: t.projectStopService?.projectStop.project.code ?? null,
+      }))}
+      activeProjects={activeProjects.map((p) => ({
+        id: p.id,
+        code: p.code,
+        status: p.status,
+        scheduledStart: p.scheduledStart.toISOString(),
+        totalPriceCents: p.totalPriceCents,
+        route: `${p.moveRequest.fromAddress} → ${p.moveRequest.toAddress}`,
+        customer: p.moveRequest.user.name ?? p.moveRequest.user.email ?? "—",
+        stopsCount: p.stops.length,
+      }))}
+      pendingQuoteCampaigns={pendingQuoteCampaigns.map((q) => ({
+        id: q.id,
+        status: q.status as "PENDING" | "QUOTED",
+        partnerName: q.partner?.name ?? q.recipientName ?? "—",
+        serviceType: q.projectStopService?.serviceType ?? "OTHER",
+        quotedPriceCents: q.quotedPriceCents,
+        createdAt: q.createdAt.toISOString(),
+        scheduledStartAt: q.scheduledStartAt?.toISOString() ?? null,
+        projectId: q.projectStopService?.projectStop.project.id ?? null,
+        projectCode: q.projectStopService?.projectStop.project.code ?? null,
+      }))}
+      recentLeads={recentLeads.map((l) => ({
+        id: l.id,
+        fromAddress: l.fromAddress,
+        toAddress: l.toAddress,
+        createdAt: l.createdAt.toISOString(),
+        type: l.type,
+        itemsCount: l.itemsCount,
+        volumeM3: l.totalVolumeM3,
+        preferredDate: l.preferredDate?.toISOString() ?? null,
+        estimatedPriceMinCents: l.estimatedPriceMinCents,
+        estimatedPriceMaxCents: l.estimatedPriceMaxCents,
+      }))}
+      myOpenOffers={recentOffers.map((o) => ({
+        id: o.id,
+        moveRequestId: o.moveRequestId,
+        priceCents: o.priceCents,
+        validUntil: o.validUntil.toISOString(),
+        route: `${o.moveRequest.fromAddress} → ${o.moveRequest.toAddress}`,
+        createdAt: o.createdAt.toISOString(),
+      }))}
+      employeeWorkload={employeeWorkload.map((e) => ({
+        id: e.id,
+        name: e.name,
+        role: e.role,
+        weekTaskCount: e._count.jobTasks,
+      }))}
+      notifications={recentNotifications.map((n) => ({
+        id: n.id,
+        type: n.type,
+        severity: n.severity,
+        status: n.status,
+        title: n.title,
+        body: n.body,
+        href: n.href,
+        createdAt: n.createdAt.toISOString(),
+      }))}
+      unreadNotifications={unreadNotifications}
+    />
   );
-}
-
-function StatTile({
-  icon: Icon,
-  label,
-  value,
-  accent,
-  href,
-  subline,
-}: {
-  icon: typeof Inbox;
-  label: string;
-  value: number | string;
-  accent: "blue" | "amber" | "emerald" | "violet";
-  href?: string;
-  subline?: string;
-}) {
-  const accentMap = {
-    blue: "text-[var(--color-brand-blue)] bg-[var(--color-brand-blue-light)]",
-    amber: "text-amber-700 bg-amber-50",
-    emerald: "text-emerald-700 bg-emerald-50",
-    violet: "text-violet-700 bg-violet-50",
-  };
-  const body = (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-secondary/30">
-      <span
-        className={`grid size-9 shrink-0 place-items-center rounded-lg ${accentMap[accent]}`}
-      >
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <p className="font-display text-lg font-bold leading-tight tabular-nums text-foreground">
-          {value}
-        </p>
-        {subline && (
-          <p className="truncate text-[10px] text-muted-foreground">{subline}</p>
-        )}
-      </div>
-    </div>
-  );
-  return href ? <Link href={href}>{body}</Link> : body;
-}
-
-function relativeTime(d: Date): string {
-  const diff = Date.now() - d.getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "μόλις τώρα";
-  if (m < 60) return `${m}ʹ`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  const days = Math.floor(h / 24);
-  if (days < 7) return `${days}d`;
-  return new Intl.DateTimeFormat("el-GR", { day: "2-digit", month: "short" }).format(
-    d,
-  );
-}
-
-function statusLabel(s: string): string {
-  switch (s) {
-    case "OPEN":
-      return "Σε εξέλιξη";
-    case "ACCEPTED":
-      return "Αποδεκτή";
-    case "REJECTED":
-      return "Απορρίφθηκε";
-    case "EXPIRED":
-      return "Έληξε";
-    default:
-      return s;
-  }
 }

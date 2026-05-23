@@ -27,7 +27,7 @@ export default async function DashboardLayout({
           role: session.user.role,
         }}
       />
-      <div className="flex min-w-0 flex-1 flex-col pb-16 lg:pb-0">
+      <div className="flex min-w-0 flex-1 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
         {children}
       </div>
       <DashboardBottomNav />

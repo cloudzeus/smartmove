@@ -207,32 +207,39 @@ function PaymentRow({
   createdAt: Date;
 }) {
   const content = (
-    <div className="grid items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-card)] sm:grid-cols-[1fr_auto_auto_auto]">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-        {subtitle && (
-          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-        )}
-        <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {formatDate(createdAt)}
-        </p>
-      </div>
-      {docType && (
-        <span
-          className={cn(
-            "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
-            docType === "INVOICE"
-              ? "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]"
-              : "bg-secondary text-muted-foreground",
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-card)] sm:grid sm:grid-cols-[1fr_auto_auto_auto] sm:items-center sm:gap-3">
+      <div className="flex items-start justify-between gap-3 sm:min-w-0 sm:block">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+          {subtitle && (
+            <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
           )}
-        >
-          {docType === "INVOICE" ? "Τιμολόγιο" : "Απόδειξη"}
+          <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            {formatDate(createdAt)}
+          </p>
+        </div>
+        <span className="shrink-0 font-display text-lg font-bold tabular-nums text-foreground sm:hidden">
+          {(amountCents / 100).toFixed(2)}€
         </span>
-      )}
-      <StatusBadge status={status} />
-      <span className="font-display text-lg font-bold tabular-nums text-foreground">
-        {(amountCents / 100).toFixed(2)}€
-      </span>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 sm:contents sm:mt-0 sm:border-0 sm:pt-0">
+        {docType && (
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
+              docType === "INVOICE"
+                ? "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]"
+                : "bg-secondary text-muted-foreground",
+            )}
+          >
+            {docType === "INVOICE" ? "Τιμολόγιο" : "Απόδειξη"}
+          </span>
+        )}
+        <StatusBadge status={status} />
+        <span className="ml-auto hidden font-display text-lg font-bold tabular-nums text-foreground sm:inline">
+          {(amountCents / 100).toFixed(2)}€
+        </span>
+      </div>
     </div>
   );
   return <li>{href ? <Link href={href}>{content}</Link> : content}</li>;

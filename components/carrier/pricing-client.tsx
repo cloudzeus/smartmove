@@ -99,12 +99,12 @@ export function PricingClient({ items }: Props) {
         <div className="flex items-center gap-2">
           <BulkUplift onApplied={() => router.refresh()} />
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Αναζήτηση…"
-              className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-sm outline-none focus:border-[var(--color-brand-blue)] md:w-56"
+              placeholder="Αναζήτηση αντικειμένου…"
+              className="h-10 w-full rounded-lg border-2 border-border bg-white pl-9 pr-3 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-[var(--color-brand-blue)] focus:ring-2 focus:ring-[var(--color-brand-blue)]/20 md:w-64"
             />
           </div>
         </div>
@@ -160,6 +160,8 @@ function PricingRow({ it }: { it: CatalogEntryWithPrice }) {
     String((it.price?.packingSurchargeCents ?? 0) / 100) !==
       (packing || "0");
 
+  const hasPrice = !!it.price;
+
   const save = () => {
     setSaved(null);
     start(async () => {
@@ -180,43 +182,62 @@ function PricingRow({ it }: { it: CatalogEntryWithPrice }) {
   };
 
   return (
-    <li className="grid items-center gap-3 px-4 py-3 sm:grid-cols-[1.5fr_repeat(3,_1fr)_auto]">
-      <div className="min-w-0">
-        <p className="truncate font-semibold text-foreground">{it.nameEl}</p>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {it.nameEn}
-          {it.defaultVolumeM3 != null && ` · ${it.defaultVolumeM3.toFixed(2)} m³`}
-        </p>
+    <li
+      className={cn(
+        "grid items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/30",
+        "sm:grid-cols-[1.5fr_repeat(3,_minmax(110px,_1fr))_auto]",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          className={cn(
+            "size-2 shrink-0 rounded-full",
+            hasPrice ? "bg-emerald-500" : "bg-border",
+          )}
+          aria-hidden
+          title={hasPrice ? "Έχει τιμή" : "Χωρίς τιμή"}
+        />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-foreground">{it.nameEl}</p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {it.nameEn}
+            {it.defaultVolumeM3 != null &&
+              ` · ${it.defaultVolumeM3.toFixed(2)} m³`}
+          </p>
+        </div>
       </div>
       <PriceInput
         label="Βασική"
+        sublabel="ανά τεμάχιο"
         value={base}
         onChange={setBase}
-        hint="ανά τεμάχιο"
+        tone="primary"
       />
       <PriceInput
         label="+ Γερανός"
+        sublabel="προσθετικό"
         value={crane}
         onChange={setCrane}
-        hint="προσθετικό"
+        tone="amber"
       />
       <PriceInput
         label="+ Αμπαλάζ"
+        sublabel="προσθετικό"
         value={packing}
         onChange={setPacking}
-        hint="προσθετικό"
+        tone="violet"
       />
       <button
         type="button"
         onClick={save}
         disabled={pending || !isDirty}
         className={cn(
-          "inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-xs font-bold transition-colors",
+          "inline-flex h-10 items-center gap-1.5 rounded-lg px-4 text-xs font-bold transition-colors disabled:cursor-not-allowed",
           isDirty
-            ? "bg-foreground text-background hover:bg-foreground/90"
+            ? "bg-[var(--color-brand-blue)] text-white shadow-sm hover:bg-[var(--color-brand-blue-deep)]"
             : "bg-secondary text-muted-foreground",
-          saved === "ok" && "bg-emerald-600 text-white",
-          saved === "err" && "bg-rose-600 text-white",
+          saved === "ok" && "!bg-emerald-600 text-white",
+          saved === "err" && "!bg-rose-600 text-white",
         )}
         title={!isDirty ? "Καμία αλλαγή" : undefined}
       >
@@ -239,21 +260,45 @@ function PricingRow({ it }: { it: CatalogEntryWithPrice }) {
 
 function PriceInput({
   label,
+  sublabel,
   value,
   onChange,
-  hint,
+  tone = "primary",
 }: {
   label: string;
+  sublabel?: string;
   value: string;
   onChange: (v: string) => void;
-  hint?: string;
+  tone?: "primary" | "amber" | "violet";
 }) {
+  const filled = value !== "" && value !== "0";
+  const ringTone =
+    tone === "amber"
+      ? "focus:border-amber-500 focus:ring-amber-500/20"
+      : tone === "violet"
+        ? "focus:border-violet-500 focus:ring-violet-500/20"
+        : "focus:border-[var(--color-brand-blue)] focus:ring-[var(--color-brand-blue)]/20";
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+      <span className="flex items-baseline gap-1 text-[11px] font-bold uppercase tracking-wide text-foreground">
         {label}
+        {sublabel && (
+          <span className="text-[9px] font-normal normal-case tracking-normal text-muted-foreground">
+            · {sublabel}
+          </span>
+        )}
       </span>
-      <div className="relative">
+      <div
+        className={cn(
+          "relative flex items-center rounded-lg border-2 bg-white shadow-[inset_0_1px_0_rgba(15,23,42,0.03)] transition-colors",
+          filled ? "border-foreground/30" : "border-border",
+          "focus-within:ring-2",
+          ringTone,
+        )}
+      >
+        <span className="pointer-events-none flex h-10 w-9 items-center justify-center border-r border-border bg-secondary/60 text-sm font-bold text-foreground">
+          €
+        </span>
         <input
           type="number"
           inputMode="decimal"
@@ -261,14 +306,10 @@ function PriceInput({
           step="0.01"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="—"
-          className="h-9 w-full rounded-md border border-border bg-background pl-2.5 pr-7 text-sm font-semibold tabular-nums outline-none focus:border-[var(--color-brand-blue)]"
+          placeholder="0,00"
+          className="h-10 w-full rounded-r-lg bg-transparent px-2.5 text-base font-bold tabular-nums text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground/50"
         />
-        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-          €
-        </span>
       </div>
-      {hint && <span className="text-[9px] text-muted-foreground">{hint}</span>}
     </label>
   );
 }
@@ -314,14 +355,14 @@ function BulkUplift({ onApplied }: { onApplied: () => void }) {
   }
 
   return (
-    <div className="flex items-center gap-1.5 rounded-md border border-border bg-background p-1">
+    <div className="flex items-center gap-1.5 rounded-lg border-2 border-border bg-white p-1 shadow-sm">
       <input
         type="number"
         value={percent}
         onChange={(e) => setPercent(e.target.value)}
         placeholder="+5"
         step="1"
-        className="h-7 w-16 rounded bg-secondary px-2 text-xs outline-none"
+        className="h-8 w-16 rounded border border-border bg-white px-2 text-sm font-bold tabular-nums text-foreground outline-none focus:border-[var(--color-brand-blue)]"
       />
       <span className="text-xs text-muted-foreground">%</span>
       <button
@@ -364,10 +405,10 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+        "inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold transition-colors",
         active
-          ? "bg-foreground text-background"
-          : "bg-secondary text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+          ? "border-[var(--color-brand-blue)] bg-[var(--color-brand-blue)] text-white shadow-sm"
+          : "border-border bg-white text-foreground hover:border-[var(--color-brand-blue)]/40 hover:bg-secondary",
       )}
     >
       {label}

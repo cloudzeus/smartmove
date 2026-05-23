@@ -62,6 +62,7 @@ export default async function DashboardOverview() {
           totalVolumeM3: true,
           itemsCount: true,
           createdAt: true,
+          _count: { select: { offers: { where: { status: "OPEN" } } } },
         },
       }),
       db.user.findUnique({
@@ -81,7 +82,10 @@ export default async function DashboardOverview() {
     ? Math.ceil((effectiveRetention.getTime() - Date.now()) / 86_400_000)
     : settings.retentionFreeMonths * 30;
   const showRetentionBanner = retentionDaysLeft <= RETENTION_WARN_DAYS;
-  const phoneMissing = !userMeta?.phone || userMeta.phone.trim().length < 5;
+  // Count only digits — strings like "+30 6900000000" should not be flagged
+  // as missing just because of formatting/whitespace.
+  const phoneDigits = (userMeta?.phone ?? "").replace(/\D+/g, "");
+  const phoneMissing = phoneDigits.length < 8;
 
   const totalSavedVolume = totalVolumeAgg._sum.volume_m3 ?? 0;
   const firstName = (session!.user.name ?? session!.user.email ?? "").split(/[\s@]/)[0];
@@ -112,7 +116,7 @@ export default async function DashboardOverview() {
       <div className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
         {phoneMissing && (
           <div className="mb-4">
-            <PhoneRequiredBanner />
+            <PhoneRequiredBanner initialPhone={userMeta?.phone ?? ""} />
           </div>
         )}
         {showRetentionBanner && (
@@ -125,7 +129,7 @@ export default async function DashboardOverview() {
             />
           </div>
         )}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <MetricCard
             icon={Truck}
             label="Αιτήματα μεταφοράς"
@@ -206,7 +210,18 @@ export default async function DashboardOverview() {
                           </p>
                         </div>
                       </div>
-                      <StatusBadge status={r.status} />
+                      <div className="flex shrink-0 items-center gap-2">
+                        {r._count.offers > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand-blue-light)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-brand-blue-deep)]">
+                            {r._count.offers}{" "}
+                            {r._count.offers === 1 ? "προσφορά" : "προσφορές"}
+                          </span>
+                        )}
+                        <StatusBadge
+                          status={r.status}
+                          offersCount={r._count.offers}
+                        />
+                      </div>
                     </Link>
                   </li>
                 ))}
@@ -277,13 +292,25 @@ function QuickAction({
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  status,
+  offersCount = 0,
+}: {
+  status: string;
+  offersCount?: number;
+}) {
   const map: Record<string, { label: string; cls: string }> = {
     DRAFT: { label: "Πρόχειρο", cls: "bg-secondary text-muted-foreground" },
-    PUBLISHED: {
-      label: "Σε αναμονή προσφορών",
-      cls: "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]",
-    },
+    PUBLISHED:
+      offersCount > 0
+        ? {
+            label: "Έχει προσφορές",
+            cls: "bg-emerald-50 text-emerald-700",
+          }
+        : {
+            label: "Σε αναμονή προσφορών",
+            cls: "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]",
+          },
     AWARDED: { label: "Ανατέθηκε", cls: "bg-amber-50 text-amber-700" },
     COMPLETED: { label: "Ολοκληρώθηκε", cls: "bg-emerald-50 text-emerald-700" },
     CANCELLED: { label: "Ακυρώθηκε", cls: "bg-red-50 text-red-700" },

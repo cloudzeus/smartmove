@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { RequestMap, type RouteStop } from "@/components/dashboard/request-map";
+import { OfferAcceptList } from "@/components/dashboard/offer-accept-list";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,21 @@ export default async function RequestDetailPage({ params }: PageProps) {
       offers: {
         orderBy: { createdAt: "desc" },
         include: {
-          carrier: { select: { id: true, name: true, email: true } },
+          carrier: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              tenantMemberships: {
+                select: {
+                  tenant: {
+                    select: { commercialName: true, legalName: true },
+                  },
+                },
+                take: 1,
+              },
+            },
+          },
         },
       },
       payment: true,
@@ -308,38 +323,30 @@ export default async function RequestDetailPage({ params }: PageProps) {
                   {moveRequest.offers.length}
                 </span>
               </h3>
-              {moveRequest.offers.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border p-4 text-center">
-                  <Clock className="mx-auto mb-2 size-6 text-muted-foreground/60" />
-                  <p className="text-xs text-muted-foreground">
-                    Οι μεταφορείς ενημερώθηκαν. Οι πρώτες προσφορές φτάνουν
-                    συνήθως σε 30–60 λεπτά.
-                  </p>
-                </div>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {moveRequest.offers.map((offer) => (
-                    <li
-                      key={offer.id}
-                      className="rounded-xl border border-border bg-secondary/30 p-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-foreground">
-                          {offer.carrier.name ?? offer.carrier.email}
-                        </span>
-                        <span className="font-display text-lg font-bold text-[var(--color-brand-blue-deep)]">
-                          {(offer.priceCents / 100).toFixed(0)}€
-                        </span>
-                      </div>
-                      {offer.notes && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {offer.notes}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <OfferAcceptList
+                moveRequestId={moveRequest.id}
+                moveStatus={moveRequest.status}
+                offers={moveRequest.offers.map((o) => {
+                  const tenant =
+                    o.carrier.tenantMemberships[0]?.tenant ?? null;
+                  return {
+                    id: o.id,
+                    priceCents: o.priceCents,
+                    estimatedDays: o.estimatedDays,
+                    notes: o.notes,
+                    status: o.status,
+                    validUntil: o.validUntil.toISOString(),
+                    carrierName: o.carrier.name ?? o.carrier.email ?? "Μεταφορέας",
+                    carrierBadge:
+                      tenant?.commercialName ?? tenant?.legalName ?? null,
+                    proposedSlots: parseProposedSlots(o.proposedSlotsJson),
+                    acceptedSlotAt: o.acceptedSlotAt?.toISOString() ?? null,
+                    contractPdfUrl: o.contractPdfUrl,
+                    contractDocxUrl: o.contractDocxUrl,
+                    contractRef: o.contractRef,
+                  };
+                })}
+              />
             </div>
 
             {/* Quick links */}
@@ -479,4 +486,31 @@ function typeLabel(v: string): string {
     case "HEAVY": return "Βαρέα";
     default: return v;
   }
+}
+
+const LEGACY_PERIOD_HOUR: Record<string, number> = {
+  MORNING: 9,
+  AFTERNOON: 13,
+  EVENING: 18,
+};
+
+function parseProposedSlots(
+  json: unknown,
+): Array<{ date: string; hour: number }> {
+  if (!Array.isArray(json)) return [];
+  const out: Array<{ date: string; hour: number }> = [];
+  for (const raw of json) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw as { date?: unknown; hour?: unknown; period?: unknown };
+    if (typeof s.date !== "string") continue;
+    let hour: number | null = null;
+    if (typeof s.hour === "number" && Number.isFinite(s.hour)) {
+      hour = Math.round(s.hour);
+    } else if (typeof s.period === "string" && s.period in LEGACY_PERIOD_HOUR) {
+      hour = LEGACY_PERIOD_HOUR[s.period];
+    }
+    if (hour == null || hour < 0 || hour > 23) continue;
+    out.push({ date: s.date, hour });
+  }
+  return out;
 }

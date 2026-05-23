@@ -232,7 +232,7 @@ export function RequestMap({ apiKey, stops }: Props) {
       </div>
       <div
         ref={containerRef}
-        className="h-[420px] w-full overflow-hidden rounded-xl border border-border"
+        className="h-[260px] w-full overflow-hidden rounded-md border border-border [.carrier-shell_&]:h-[220px]"
       />
       <p className="mt-2 text-[10px] text-muted-foreground">
         Routing: OpenStreetMap / OSRM. Tiles: MapTiler.

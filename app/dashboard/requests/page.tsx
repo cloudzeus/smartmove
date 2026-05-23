@@ -44,7 +44,7 @@ export default async function RequestsPage({ searchParams }: PageProps) {
     where,
     orderBy: { createdAt: "desc" },
     include: {
-      _count: { select: { offers: true } },
+      _count: { select: { offers: { where: { status: "OPEN" } } } },
     },
   });
 
@@ -86,35 +86,42 @@ export default async function RequestsPage({ searchParams }: PageProps) {
 
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         {/* Status tabs */}
-        <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
-          {STATUS_TABS.map((t) => {
-            const active = filter === t.key;
-            const count = t.key === "all" ? totalAll : countByStatus[t.key] ?? 0;
-            return (
-              <Link
-                key={t.key}
-                href={t.key === "all" ? "/dashboard/requests" : `/dashboard/requests?status=${t.key}`}
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-[var(--color-brand-blue)] text-white shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                )}
-              >
-                {t.label}
-                <span
+        <div className="relative mb-5">
+          <div className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:rounded-xl sm:border sm:border-border sm:bg-card sm:p-1 sm:px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {STATUS_TABS.map((t) => {
+              const active = filter === t.key;
+              const count = t.key === "all" ? totalAll : countByStatus[t.key] ?? 0;
+              return (
+                <Link
+                  key={t.key}
+                  href={t.key === "all" ? "/dashboard/requests" : `/dashboard/requests?status=${t.key}`}
+                  aria-current={active ? "page" : undefined}
                   className={cn(
-                    "rounded-full px-1.5 text-[10px] font-bold",
+                    "inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors sm:rounded-lg sm:border-0",
                     active
-                      ? "bg-white/20 text-white"
-                      : "bg-secondary text-muted-foreground",
+                      ? "border-transparent bg-[var(--color-brand-blue)] text-white shadow-sm"
+                      : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground",
                   )}
                 >
-                  {count}
-                </span>
-              </Link>
-            );
-          })}
+                  {t.label}
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 text-[10px] font-bold",
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {count}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent sm:hidden"
+          />
         </div>
 
         {requests.length === 0 ? (
@@ -134,7 +141,7 @@ export default async function RequestsPage({ searchParams }: PageProps) {
               <li key={r.id}>
                 <Link
                   href={`/dashboard/requests/${r.id}`}
-                  className="group grid items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-brand-blue)]/30 hover:shadow-[var(--shadow-pop)] sm:grid-cols-[1.5fr_1fr_1fr_auto]"
+                  className="group grid items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-brand-blue)]/30 hover:shadow-[var(--shadow-pop)] sm:gap-4 sm:p-5 sm:grid-cols-[1.5fr_1fr_1fr_auto]"
                 >
                   <div className="flex items-start gap-3">
                     <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]">
@@ -165,7 +172,7 @@ export default async function RequestsPage({ searchParams }: PageProps) {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:flex-col sm:items-start sm:gap-1">
                     <span className="inline-flex items-center gap-1.5">
                       <PackageOpen className="size-3.5" />
                       {r.itemsCount} αντικείμενα ·{" "}
@@ -181,19 +188,23 @@ export default async function RequestsPage({ searchParams }: PageProps) {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs">
+                  <div className="flex items-center justify-between gap-2 sm:block sm:text-xs">
                     {r._count.offers > 0 ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand-blue-light)] px-2.5 py-1 text-xs font-bold text-[var(--color-brand-blue-deep)]">
                         {r._count.offers} προσφορές
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         Καμία προσφορά ακόμα
                       </span>
                     )}
+                    <div className="flex items-center gap-2 sm:hidden">
+                      <StatusBadge status={r.status} offersCount={r._count.offers} />
+                      <ArrowRight className="size-4 text-muted-foreground" />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-end gap-3">
-                    <StatusBadge status={r.status} />
+                  <div className="hidden items-center justify-end gap-3 sm:flex">
+                    <StatusBadge status={r.status} offersCount={r._count.offers} />
                     <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
                   </div>
                 </Link>
@@ -206,13 +217,25 @@ export default async function RequestsPage({ searchParams }: PageProps) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  status,
+  offersCount = 0,
+}: {
+  status: string;
+  offersCount?: number;
+}) {
   const map: Record<string, { label: string; cls: string }> = {
     DRAFT: { label: "Πρόχειρο", cls: "bg-secondary text-muted-foreground" },
-    PUBLISHED: {
-      label: "Σε αναμονή",
-      cls: "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]",
-    },
+    PUBLISHED:
+      offersCount > 0
+        ? {
+            label: "Έχει προσφορές",
+            cls: "bg-emerald-50 text-emerald-700",
+          }
+        : {
+            label: "Σε αναμονή",
+            cls: "bg-[var(--color-brand-blue-light)] text-[var(--color-brand-blue-deep)]",
+          },
     AWARDED: { label: "Ανατέθηκε", cls: "bg-amber-50 text-amber-700" },
     COMPLETED: { label: "Ολοκληρώθηκε", cls: "bg-emerald-50 text-emerald-700" },
     CANCELLED: { label: "Ακυρώθηκε", cls: "bg-red-50 text-red-700" },

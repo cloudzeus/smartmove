@@ -1,5 +1,13 @@
 import { env, flags } from "./env";
 
+export interface MailgunAttachment {
+  filename: string;
+  /** Binary payload — Node Buffer */
+  content: Buffer;
+  /** MIME type, e.g. "application/pdf". */
+  contentType?: string;
+}
+
 export interface MailgunMessage {
   to: string | string[];
   subject: string;
@@ -7,6 +15,7 @@ export interface MailgunMessage {
   text?: string;
   replyTo?: string;
   tags?: string[];
+  attachments?: MailgunAttachment[];
 }
 
 export interface MailgunResult {
@@ -60,6 +69,16 @@ export async function sendMail(msg: MailgunMessage): Promise<MailgunResult> {
   if (msg.text) body.append("text", msg.text);
   if (msg.replyTo) body.append("h:Reply-To", msg.replyTo);
   for (const tag of msg.tags ?? []) body.append("o:tag", tag);
+  for (const att of msg.attachments ?? []) {
+    // Copy into a fresh Uint8Array so the underlying buffer is plain ArrayBuffer
+    // (not SharedArrayBuffer/ArrayBufferLike), which Blob requires.
+    const arr = new Uint8Array(att.content.byteLength);
+    arr.set(att.content);
+    const blob = new Blob([arr], {
+      type: att.contentType ?? "application/octet-stream",
+    });
+    body.append("attachment", blob, att.filename);
+  }
 
   try {
     const r = await fetch(url, {

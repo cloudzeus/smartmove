@@ -147,34 +147,63 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
 
 export function DashboardBottomNav() {
   const path = usePathname();
-  const items = NAV.slice(0, 5);
+  // 4 primary tabs + center FAB for "Νέο αίτημα"
+  const left: NavItem[] = [NAV[0], NAV[1]];
+  const right: NavItem[] = [NAV[2], NAV[3]];
+
+  const renderItem = (item: NavItem) => {
+    const active = item.exact
+      ? path === item.href
+      : path === item.href || path.startsWith(`${item.href}/`);
+    return (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            "relative flex h-full min-h-[56px] flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold transition-colors active:bg-secondary/60",
+            active
+              ? "text-[var(--color-brand-blue)]"
+              : "text-muted-foreground",
+          )}
+        >
+          {active && (
+            <span
+              aria-hidden
+              className="absolute inset-x-6 top-0 h-0.5 rounded-b-full bg-[var(--color-brand-blue)]"
+            />
+          )}
+          <item.icon className="size-[22px]" />
+          <span className="truncate text-center leading-none">
+            {item.label.split(" ")[0]}
+          </span>
+        </Link>
+      </li>
+    );
+  };
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur lg:hidden">
-      <ul className="grid grid-cols-5">
-        {items.map((item) => {
-          const active = item.exact
-            ? path === item.href
-            : path === item.href || path.startsWith(`${item.href}/`);
-          return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className={cn(
-                  "flex flex-col items-center gap-0.5 px-2 py-2.5 text-[10px] font-medium transition-colors",
-                  active
-                    ? "text-[var(--color-brand-blue)]"
-                    : "text-muted-foreground",
-                )}
-              >
-                <item.icon className="size-5" />
-                <span className="truncate text-center leading-tight">
-                  {item.label.split(" ")[0]}
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <>
+      {/* Floating "Νέο αίτημα" FAB — sits in the visual notch of the bottom nav */}
+      <Link
+        href="/scan"
+        aria-label="Νέο αίτημα μεταφοράς"
+        className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-50 grid size-14 -translate-x-1/2 place-items-center rounded-full bg-[var(--color-brand-blue)] text-white shadow-[0_10px_30px_rgba(37,99,235,0.45)] ring-4 ring-white transition-transform active:scale-95 lg:hidden"
+      >
+        <Sparkles className="size-6" />
+      </Link>
+
+      <nav
+        aria-label="Πλοήγηση πίνακα"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden"
+      >
+        <ul className="grid grid-cols-5 items-stretch">
+          {left.map(renderItem)}
+          {/* spacer cell for FAB */}
+          <li aria-hidden className="pointer-events-none" />
+          {right.map(renderItem)}
+        </ul>
+      </nav>
+    </>
   );
 }

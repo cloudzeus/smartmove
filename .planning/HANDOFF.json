@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-20T06:47:21.961Z",
+  "timestamp": "2026-05-23T06:58:56.972Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -18,7 +18,59 @@
   "uncommitted_files": [
     {
       "status": "M",
+      "path": ".gitignore"
+    },
+    {
+      "status": "M",
       "path": ".planning/HANDOFF.json"
+    },
+    {
+      "status": "M",
+      "path": "app/admin/tenants/[id]/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/carrier/layout.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/carrier/leads/[id]/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/carrier/leads/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/carrier/offers/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/carrier/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/dashboard/layout.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/dashboard/offers/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/dashboard/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/dashboard/payments/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/dashboard/requests/[id]/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/dashboard/requests/page.tsx"
     },
     {
       "status": "M",
@@ -26,21 +78,333 @@
     },
     {
       "status": "M",
-      "path": "components/marketing/hero.tsx"
+      "path": "components/admin/tenants-list-client.tsx"
     },
     {
       "status": "M",
-      "path": "components/marketing/how-it-works.tsx"
+      "path": "components/carrier/leads-client.tsx"
     },
     {
       "status": "M",
-      "path": "components/marketing/site-header.tsx"
+      "path": "components/carrier/offer-form.tsx"
     },
     {
       "status": "M",
-      "path": "components/marketing/trust-ribbon.tsx"
+      "path": "components/carrier/pricing-client.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/carrier/sidebar.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/dashboard/page-header.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/dashboard/phone-required-banner.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/dashboard/request-map.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/dashboard/settings-tabs.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/dashboard/sidebar.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/shared/metric-card.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/shared/page-hero.tsx"
+    },
+    {
+      "status": "M",
+      "path": "lib/mailgun.ts"
+    },
+    {
+      "status": "M",
+      "path": "next.config.ts"
+    },
+    {
+      "status": "M",
+      "path": "package-lock.json"
+    },
+    {
+      "status": "M",
+      "path": "package.json"
+    },
+    {
+      "status": "M",
+      "path": "prisma/schema.prisma"
+    },
+    {
+      "status": "M",
+      "path": "server/actions/carrier-leads.action.ts"
+    },
+    {
+      "status": "M",
+      "path": "server/actions/carrier-otp.action.ts"
+    },
+    {
+      "status": "M",
+      "path": "server/actions/user.action.ts"
+    },
+    {
+      "status": "??",
+      "path": ".planning/carrier-projects/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/billing/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/branches/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/calendar/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/employees/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/events/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/jobs/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/partners/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/projects/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/reports/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/reviews/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/settings/"
+    },
+    {
+      "status": "??",
+      "path": "app/carrier/tasks/"
+    },
+    {
+      "status": "??",
+      "path": "app/quote/"
+    },
+    {
+      "status": "??",
+      "path": "app/task-confirm/"
+    },
+    {
+      "status": "??",
+      "path": "chat_2026_05_21_18_22_55.md"
+    },
+    {
+      "status": "??",
+      "path": "components/admin/set-password-button.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/calendar.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/coming-soon.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/command-palette.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/dashboard-client.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/data-table.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/employees-client.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/gantt.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/job-delete-button.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/notification-bell.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/partner-company-detail-client.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/partner-quote-section.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/partners-client.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/project-detail-client.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/reports-client.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/status-pill.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/stop-gantt.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/tasks-master-client.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/tasks-panel.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/carrier/test-cleanup-button.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/dashboard/offer-accept-list.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/public/"
+    },
+    {
+      "status": "??",
+      "path": "components/shared/stat-cell.tsx"
+    },
+    {
+      "status": "??",
+      "path": "lib/build-job-tasks.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/build-project-tasks.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/check-resource-availability.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/contract-fonts.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/contract.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/emails/partner-quote-request.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/events.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/project-history.ts"
+    },
+    {
+      "status": "??",
+      "path": "scripts/backfill-carrier-projects.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/accept-offer.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/carrier-employees.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/carrier-job-delete.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/carrier-job-tasks.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/carrier-partners.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/carrier-projects.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/carrier-reports.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/carrier-test-cleanup.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/notifications.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/partner-quote-requests.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/service-quote-campaign.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/task-confirmation.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "server/actions/task-reminders.action.ts"
+    },
+    {
+      "status": "??",
+      "path": "types/wawoff2.d.ts"
     }
   ],
   "next_action": null,
-  "context_notes": "Recent commits:\n94bc86b camera pro problem\n59661c9 camera pro problem\n8077e2e camera pro problem\nd14d505 camera pro problem\n3bfaf88 camera pro problem"
+  "context_notes": "Recent commits:\nd241769 ui improove\n94bc86b camera pro problem\n59661c9 camera pro problem\n8077e2e camera pro problem\nd14d505 camera pro problem"
 }

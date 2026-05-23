@@ -184,6 +184,7 @@ model MoveRequest {
   toLng         Float?
   // NOTE: PostGIS columns pickupGeom + dropoffGeom are STORED generated columns
   // managed via prisma/sql/001_postgis_geo.sql. Not visible to Prisma.
+  // Re-run that script after every `prisma db push` if columns get dropped.
   preferredDate DateTime?
   flexDays      Int       @default(0)
   shared        Boolean   @default(false)
@@ -215,12 +216,15 @@ model MoveRequest {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stops   MoveRequestStop[]
-  offers  Offer[]
-  payment Payment?
-  review  Review?
-  scanFee ScanFee?
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stops          MoveRequestStop[]
+  offers         Offer[]
+  payment        Payment?
+  review         Review?
+  scanFee        ScanFee?
+  partnerQuoteRequests PartnerQuoteRequest[]
+  jobTasks       JobTask[]
+  carrierProject CarrierProject?
 
   @@index([userId])
   @@index([status, publishedAt])
@@ -340,6 +344,7 @@ model MoveRequestStop {
   moveRequest  MoveRequest    @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   fromLocation SavedLocation? @relation("StopFromLocation", fields: [fromLocationId], references: [id], onDelete: SetNull)
   toLocation   SavedLocation? @relation("StopToLocation", fields: [toLocationId], references: [id], onDelete: SetNull)
+  projectStop  ProjectStop?
 
   @@index([moveRequestId])
 }
@@ -366,8 +371,19 @@ model Offer {
   status        OfferStatus @default(OPEN)
 
   // Proposed timeslots for the customer to pick from. Array of
-  // { date: "YYYY-MM-DD", period: "MORNING"|"AFTERNOON"|"EVENING" } objects.
+  // { date: "YYYY-MM-DD", hour: number } objects (backward-compat: period strings).
   proposedSlotsJson Json?
+
+  // Acceptance — set when customer accepts and picks one of the proposed slots
+  // (or a custom datetime). status transitions to ACCEPTED at the same time.
+  acceptedAt        DateTime?
+  acceptedSlotAt    DateTime?
+
+  // Contract — generated as DOCX + PDF on accept, stored relative to the app
+  // public/contracts directory and emailed to both parties.
+  contractPdfUrl    String?  @db.Text
+  contractDocxUrl   String?  @db.Text
+  contractRef       String?  // human-friendly reference number
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -375,6 +391,7 @@ model Offer {
   moveRequest MoveRequest @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   carrier     User        @relation("CarrierOffers", fields: [carrierUserId], references: [id], onDelete: Cascade)
   payment     Payment?
+  carrierProject CarrierProject?
 
   @@index([moveRequestId])
   @@index([carrierUserId])
@@ -482,14 +499,661 @@ model Tenant {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  branches      Branch[]
-  vehicles      Vehicle[]
-  subscriptions Subscription[]
-  memberships   TenantMembership[]
-  itemPrices    CarrierItemPrice[]
+  branches             Branch[]
+  vehicles             Vehicle[]
+  subscriptions        Subscription[]
+  memberships          TenantMembership[]
+  itemPrices           CarrierItemPrice[]
+  employees            CarrierEmployee[]
+  partners             CarrierPartner[]
+  partnerCompanies     PartnerCompany[]
+  partnerQuoteRequests PartnerQuoteRequest[]
+  jobTasks             JobTask[]
+  carrierProjects      CarrierProject[]
+  notifications        Notification[]
 
   @@index([vat])
   @@index([status])
+}
+
+enum CarrierEmployeeRole {
+  DRIVER
+  ASSISTANT
+  PACKER
+  OPERATIONS
+  ADMIN
+  OTHER
+}
+
+enum CarrierPartnerKind {
+  TRANSPORTER
+  CRANE
+  STORAGE
+  PACKER
+  ELECTRICIAN
+  CARPENTER
+  HANDYMAN
+  OTHER
+}
+
+model CarrierEmployee {
+  id        String              @id @default(cuid())
+  tenantId  String
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  role      CarrierEmployeeRole @default(DRIVER)
+  phone     String?
+  email     String?
+  idNumber  String?             // ταυτότητα / δίπλωμα (optional)
+  notes     String?             @db.Text
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  deletedAt DateTime?
+
+  jobTasks       JobTask[]
+  jobAssignments JobTaskAssignment[]
+
+  @@index([tenantId])
+}
+
+model PartnerCompany {
+  id              String @id @default(cuid())
+  tenantId        String
+  tenant          Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // AFM-fed fields (same pattern as Tenant)
+  vat             String
+  legalName       String
+  commercialName  String?
+  doyName         String?
+  legalStatus     String?
+  legalStatusKind String?
+  address         String?
+  addressNo       String?
+  postalZip       String?
+  postalArea      String?
+
+  email   String?
+  phone   String?
+  website String?
+  notes   String? @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  partners       CarrierPartner[]
+  contacts       PartnerContact[]
+  quoteRequests  PartnerQuoteRequest[]
+
+  @@unique([tenantId, vat])
+  @@index([tenantId])
+}
+
+model CarrierPartner {
+  id        String             @id @default(cuid())
+  tenantId  String
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   PartnerCompany?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  name      String
+  kind      CarrierPartnerKind @default(TRANSPORTER)
+  phone     String?
+  email     String?
+  notes     String?            @db.Text
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  deletedAt DateTime?
+
+  quoteRequests PartnerQuoteRequest[]
+  jobTasks      JobTask[]
+  jobAssignments JobTaskAssignment[]
+  projectStopServices ProjectStopService[]
+
+  @@index([tenantId])
+  @@index([companyId])
+}
+
+model PartnerContact {
+  id        String         @id @default(cuid())
+  companyId String
+  company   PartnerCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  phone     String?
+  email     String?
+  notes     String?        @db.Text
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+
+  quoteRequests PartnerQuoteRequest[]
+
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------
+// PROJECT MANAGEMENT — Tasks on each MoveRequest
+// Carrier breaks a move into tasks (loading, transit, crane work, ...),
+// assigns each to an employee or partner, and tracks status on a Gantt.
+// ---------------------------------------------------------------------
+
+enum JobTaskStatus {
+  PLANNED
+  CONFIRMED        // accepted by external partner via quote campaign
+  IN_PROGRESS
+  DONE
+  BLOCKED
+  CANCELLED
+}
+
+enum JobTaskAssigneeKind {
+  EMPLOYEE
+  PARTNER
+  UNASSIGNED
+}
+
+/// Many-to-many assignees per JobTask. A task can have N employees and/or
+/// partners working it together (driver + assistant for packing+transport).
+/// One of (employeeId, partnerId) must be set, never both.
+model JobTaskAssignment {
+  id          String           @id @default(cuid())
+  taskId      String
+  task        JobTask          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  employeeId  String?
+  employee    CarrierEmployee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  partnerId   String?
+  partner     CarrierPartner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  /// Marks the "primary" assignee — kept in sync with JobTask.assigneeEmployeeId
+  /// / assigneePartnerId during the expand→backfill→contract migration. The
+  /// primary receives the confirmation email; co-assignees see the task on
+  /// their schedule but don't get their own magic link (yet).
+  isPrimary   Boolean          @default(false)
+
+  /// Free-form role label on this task (e.g. "οδηγός", "βοηθός", "γερανιστής").
+  role        String?
+
+  createdAt   DateTime         @default(now())
+
+  @@unique([taskId, employeeId])
+  @@unique([taskId, partnerId])
+  @@index([taskId])
+  @@index([employeeId])
+  @@index([partnerId])
+}
+
+enum AssigneeConfirmationStatus {
+  NONE         // no assignee yet, or admin doesn't want to require confirmation
+  PENDING      // email sent, awaiting reply
+  CONFIRMED    // assignee accepted
+  DECLINED     // assignee declined
+}
+
+enum JobTaskCategory {
+  PREP            // packing, prep
+  LOADING         // φόρτωση
+  TRANSIT         // διαδρομή
+  CRANE           // γερανός
+  UNLOADING       // ξεφόρτωμα
+  ASSEMBLY        // συναρμολόγηση επίπλων
+  STORAGE
+  CLEANUP
+  ADMIN
+  OTHER
+}
+
+model JobTask {
+  id              String              @id @default(cuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  moveRequestId   String
+  moveRequest     MoveRequest         @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String?             @db.Text
+  category        JobTaskCategory     @default(OTHER)
+
+  /// Scheduled start time. Required so the task can render on a Gantt/calendar.
+  startAt         DateTime
+  /// Estimated duration in minutes. Total = startAt + durationMinutes.
+  durationMinutes Int                 @default(60)
+  /// Actual completion timestamps (set when status moves to IN_PROGRESS/DONE).
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  status          JobTaskStatus       @default(PLANNED)
+
+  /// Assignment — either an employee or a partner, never both.
+  assigneeKind    JobTaskAssigneeKind @default(UNASSIGNED)
+  assigneeEmployeeId String?
+  assigneeEmployee   CarrierEmployee? @relation(fields: [assigneeEmployeeId], references: [id], onDelete: SetNull)
+  assigneePartnerId  String?
+  assigneePartner    CarrierPartner?  @relation(fields: [assigneePartnerId], references: [id], onDelete: SetNull)
+
+  /// Optional vehicle pin (e.g. truck used for this task).
+  vehicleId       String?
+  vehicle         Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  /// New (T1 expand): link to a per-stop service. Optional during the
+  /// expand→backfill→contract migration. Will become required in T7.
+  projectStopServiceId String?
+  projectStopService   ProjectStopService? @relation(fields: [projectStopServiceId], references: [id], onDelete: SetNull)
+
+  /// When this task was created by accepting an external partner's quote,
+  /// link back to the originating quote request for audit/contract trail.
+  fromQuoteRequestId   String?              @unique
+  fromQuoteRequest     PartnerQuoteRequest? @relation("AcceptedQuoteTask", fields: [fromQuoteRequestId], references: [id], onDelete: SetNull)
+
+  /// Lane color hint for Gantt; falls back to category color.
+  color           String?
+
+  /// Display ordering within a project for stable Gantt lanes.
+  sortOrder       Int                 @default(0)
+
+  notes           String?             @db.Text
+
+  createdByUserId String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  availabilityOverrides AvailabilityOverride[]
+  reminders             TaskReminder[]
+  assignments           JobTaskAssignment[]
+
+  /// Dependencies: tasks that must finish before this one starts.
+  blockedBy             JobTaskDependency[] @relation("BlockedTask")
+  /// Reverse: tasks waiting on this one.
+  blocks                JobTaskDependency[] @relation("BlockerTask")
+
+  /// Assignee confirmation flow: when a task is assigned to an employee/partner,
+  /// a magic-link email goes out. They confirm or decline via /task-confirm/[token].
+  /// Admin can also confirm manually.
+  assigneeConfirmationStatus AssigneeConfirmationStatus @default(NONE)
+  assigneeConfirmationToken  String?                    @unique
+  assigneeConfirmedAt        DateTime?
+  assigneeDeclinedAt         DateTime?
+  assigneeDeclineReason      String?                    @db.Text
+  assigneeConfirmedByUserId  String?                    // set when admin confirms manually
+  assigneeConfirmationSentAt DateTime?
+
+  @@index([tenantId])
+  @@index([moveRequestId])
+  @@index([projectStopServiceId])
+  @@index([assigneeEmployeeId])
+  @@index([assigneePartnerId])
+  @@index([assigneeConfirmationStatus])
+  @@index([startAt])
+}
+
+// ---------------------------------------------------------------------
+// CARRIER PROJECTS (internal). An accepted MoveRequest becomes a Project
+// for the carrier. Each project has stops (mirror of MoveRequestStop) and
+// each stop has 0..n billable services (CRANE, PACKING, LOADING, ...).
+// JobTasks (assignments of employee+vehicle+time) attach to a service.
+// Customer-facing UX is unaffected.
+// ---------------------------------------------------------------------
+
+enum ProjectStatus {
+  DRAFT
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceType {
+  CRANE
+  PACKING
+  LOADING
+  UNLOADING
+  ASSEMBLY
+  DISASSEMBLY
+  STORAGE
+  TRANSIT
+  CLEANUP
+  OTHER
+}
+
+model CarrierProject {
+  id              String        @id @default(cuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// 1-1 with the accepted MoveRequest.
+  moveRequestId   String        @unique
+  moveRequest     MoveRequest   @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+
+  /// 1-1 with the accepted Offer.
+  offerId         String        @unique
+  offer           Offer         @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  /// Human-friendly project code for reporting (e.g. PRJ-2026-00042).
+  code            String        @unique
+
+  status          ProjectStatus @default(PLANNED)
+  scheduledStart  DateTime
+  scheduledEnd    DateTime?
+
+  /// Snapshot of the accepted offer price, in cents.
+  totalPriceCents Int
+
+  notes           String?       @db.Text
+
+  stops           ProjectStop[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([tenantId, status])
+  @@index([scheduledStart])
+}
+
+model ProjectStop {
+  id              String              @id @default(cuid())
+  projectId       String
+  project         CarrierProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// 1-1 mirror of the customer-side MoveRequestStop, when the move is
+  /// multi-stop. For single-stop moves this is null and the project stop
+  /// is synthesized from the MoveRequest from/to fields.
+  moveStopId      String?             @unique
+  moveStop        MoveRequestStop?    @relation(fields: [moveStopId], references: [id], onDelete: Cascade)
+
+  sequence        Int
+  type            StopType
+  label           String?
+  address         String
+  lat             Float?
+  lng             Float?
+
+  services        ProjectStopService[]
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([projectId, sequence])
+}
+
+model ProjectStopService {
+  id              String       @id @default(cuid())
+  projectStopId   String
+  projectStop     ProjectStop  @relation(fields: [projectStopId], references: [id], onDelete: Cascade)
+
+  serviceType     ServiceType
+  /// Free-form label override for OTHER or custom phrasing.
+  label           String?
+
+  /// Quantity (units depend on serviceType — hours, m³, items, ...).
+  quantity        Int          @default(1)
+
+  /// Ad-hoc pricing (cents). May be null until carrier sets it.
+  unitPriceCents  Int?
+  totalPriceCents Int?
+
+  /// If the service is delegated to an external partner, store the partner
+  /// here. Internal services leave this null.
+  partnerId       String?
+  partner         CarrierPartner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
+  notes           String?      @db.Text
+
+  tasks           JobTask[]
+  quoteRequests   PartnerQuoteRequest[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([projectStopId, serviceType])
+  @@index([partnerId])
+}
+
+/// Task A → Task B: A must complete before B can start.
+/// Self-referential join table. We enforce direction so cycles are easier to
+/// detect at write time.
+model JobTaskDependency {
+  id          String   @id @default(cuid())
+
+  /// The task that is blocked (B) — waits for the blocker (A) to finish.
+  blockedId   String
+  blocked     JobTask  @relation("BlockedTask", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  /// The task that must complete first (A).
+  blockerId   String
+  blocker     JobTask  @relation("BlockerTask", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@unique([blockedId, blockerId])
+  @@index([blockerId])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS & EVENT LOG
+// In-app notifications power the bell + drawer in the carrier dashboard
+// and serve as the system event log. Every action that the carrier should
+// know about emits one of these. Audit-grade: never deleted, only archived.
+// ─────────────────────────────────────────────────────────────────────
+
+enum NotificationSeverity {
+  INFO         // benign progress (e.g. partner sent a quote)
+  SUCCESS      // positive outcome (e.g. task confirmed by assignee)
+  WARNING      // needs attention (e.g. pending confirmation getting old)
+  CRITICAL     // urgent (e.g. assignee declined, conflict detected)
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_CONFIRMED
+  TASK_DECLINED
+  TASK_REMINDER_SENT
+  TASK_STATUS_CHANGED
+  TASK_OVERDUE
+  QUOTE_REQUEST_SENT
+  QUOTE_RECEIVED
+  QUOTE_ACCEPTED
+  QUOTE_DECLINED
+  QUOTE_EXPIRED
+  OFFER_ACCEPTED
+  OFFER_EXPIRING
+  PROJECT_CREATED
+  PROJECT_COMPLETED
+  AVAILABILITY_CONFLICT
+  PAYMENT_RECEIVED
+  CUSTOMER_MESSAGE
+  SYSTEM
+}
+
+model Notification {
+  id          String                @id @default(cuid())
+  tenantId    String
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Optional: scope to a specific user (e.g. only the assigner sees this).
+  /// When null, all tenant members see it.
+  userId      String?
+
+  type        NotificationType
+  severity    NotificationSeverity  @default(INFO)
+  status      NotificationStatus    @default(UNREAD)
+
+  title       String
+  body        String?               @db.Text
+
+  /// Click-through link (e.g. /carrier/projects/abc).
+  href        String?
+
+  /// Structured payload for filtering, search, downstream consumers.
+  /// Conventions: { projectId, taskId, partnerId, quoteRequestId, ... }
+  payloadJson Json                  @db.JsonB
+
+  readAt      DateTime?
+  createdAt   DateTime              @default(now())
+
+  @@index([tenantId, status, createdAt(sort: Desc)])
+  @@index([tenantId, type])
+  @@index([userId, status])
+}
+
+enum TaskReminderChannel {
+  EMAIL
+  SMS
+}
+
+enum TaskReminderStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+model TaskReminder {
+  id              String              @id @default(cuid())
+  taskId          String
+  task            JobTask             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  channel         TaskReminderChannel @default(EMAIL)
+  status          TaskReminderStatus  @default(QUEUED)
+
+  /// Destination at send time (snapshotted from the assignee so the audit
+  /// stays accurate even if the employee/partner record is later edited).
+  recipientName   String
+  recipientEmail  String?
+  recipientPhone  String?
+
+  message         String?             @db.Text
+
+  /// Optional schedule. Null = send immediately.
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  errorMessage    String?             @db.Text
+
+  triggeredByUserId String
+  createdAt       DateTime            @default(now())
+
+  @@index([taskId])
+  @@index([status, scheduledAt])
+}
+
+/// Audit row written when a carrier overrides an availability conflict
+/// during task assignment ("Greece mode").
+model AvailabilityOverride {
+  id              String     @id @default(cuid())
+  taskId          String
+  task            JobTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  overriddenByUserId String
+  overriddenAt    DateTime   @default(now())
+  reason          String?    @db.Text
+
+  /// Snapshot of the detected conflicts at the time of override.
+  /// Array of { conflictingTaskId, resourceKind, resourceId, resourceName,
+  ///            otherStart, otherEnd, projectCode } objects.
+  conflictsJson   Json       @db.JsonB
+
+  @@index([taskId])
+  @@index([overriddenByUserId])
+}
+
+enum PartnerQuoteService {
+  PACKING
+  CRANE
+  STORAGE
+  HANDYMAN
+  ELECTRICIAN
+  CARPENTER
+  OTHER
+}
+
+enum PartnerQuoteStatus {
+  PENDING
+  QUOTED
+  ACCEPTED      // carrier picked this quote → JobTask created
+  DECLINED      // partner declined
+  LOST          // carrier chose another partner's quote
+  EXPIRED
+  CANCELLED
+}
+
+/// Carrier requests a sub-quote from a partner (e.g. crane operator) for part
+/// of a MoveRequest. Partner receives a magic-link email and responds via a
+/// public form — no login required.
+model PartnerQuoteRequest {
+  id                  String              @id @default(cuid())
+  tenantId            String
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedByUserId   String
+  moveRequestId       String?
+  moveRequest         MoveRequest?        @relation(fields: [moveRequestId], references: [id], onDelete: SetNull)
+
+  /// New: link to a specific project service. Multiple quote requests with the
+  /// same projectStopServiceId form one "campaign" — carrier picks one winner.
+  projectStopServiceId String?
+  projectStopService   ProjectStopService? @relation(fields: [projectStopServiceId], references: [id], onDelete: SetNull)
+
+  /// Reverse side of JobTask.fromQuoteRequest. Filled when this quote is
+  /// accepted and a CONFIRMED task is created.
+  acceptedTask        JobTask?            @relation("AcceptedQuoteTask")
+
+  // Target — any combination of individual partner / company / company contact
+  partnerId           String?
+  partner             CarrierPartner?     @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  partnerCompanyId    String?
+  partnerCompany      PartnerCompany?     @relation(fields: [partnerCompanyId], references: [id], onDelete: SetNull)
+  partnerContactId    String?
+  partnerContact      PartnerContact?     @relation(fields: [partnerContactId], references: [id], onDelete: SetNull)
+  /// Email actually sent to (snapshot, even if partner record changes later).
+  recipientEmail      String
+  recipientName       String?
+
+  service             PartnerQuoteService
+  notes               String?             @db.Text
+  status              PartnerQuoteStatus  @default(PENDING)
+
+  /// When the partner work is expected to start (carrier sends this so the
+  /// partner can confirm availability). Pre-filled from the accepted move slot
+  /// when the carrier requests a quote on an awarded move.
+  scheduledStartAt    DateTime?
+  /// Estimated duration in minutes the carrier expects the work to take.
+  estimatedMinutes    Int?
+
+  /// One-time URL slug for the public quote form. Indexed unique.
+  token               String              @unique
+
+  /// Snapshot of the relevant move details at request time so the partner
+  /// always sees a stable view (route, items, dates) regardless of later edits.
+  moveSnapshotJson    Json?
+
+  // Partner response (filled when status → QUOTED)
+  quotedPriceCents    Int?
+  quotedNotes         String?             @db.Text
+  quotedAt            DateTime?
+
+  /// When the recipient is a PartnerCompany, the company is expected to fill
+  /// in the contact person who will be responsible for this specific project.
+  /// These fields are captured on the public quote response form.
+  respondingContactName  String?
+  respondingContactEmail String?
+  respondingContactPhone String?
+
+  expiresAt           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([tenantId])
+  @@index([moveRequestId])
+  @@index([projectStopServiceId])
+  @@index([partnerId])
+  @@index([partnerCompanyId])
+  @@index([partnerContactId])
+  @@index([token])
 }
 
 model Branch {
@@ -582,8 +1246,9 @@ model Vehicle {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch   Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  jobTasks JobTask[]
 
   @@unique([tenantId, plate])
   @@index([tenantId])

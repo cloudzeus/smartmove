@@ -29,6 +29,33 @@ export type UserActionResult =
   | { ok: true; message?: string }
   | { ok: false; error: string };
 
+/**
+ * Lightweight action used by the missing-phone banner on the dashboard
+ * overview. Only validates + persists the phone (no other profile fields).
+ */
+export async function setUserPhone(phone: string): Promise<UserActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { ok: false, error: "Δεν είσαι συνδεδεμένος." };
+  }
+  const parsed = phoneSchema.safeParse(phone);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Σφάλμα" };
+  }
+  try {
+    await db.user.update({
+      where: { id: session.user.id },
+      data: { phone: parsed.data.replace(/\s+/g, " ").trim() },
+    });
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/settings");
+    return { ok: true, message: "Το τηλέφωνο αποθηκεύτηκε." };
+  } catch (e) {
+    console.error("[setUserPhone]", e);
+    return { ok: false, error: "Αποθήκευση απέτυχε." };
+  }
+}
+
 export async function updateUserDetails(
   input: unknown,
 ): Promise<UserActionResult> {

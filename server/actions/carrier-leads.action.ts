@@ -45,21 +45,45 @@ export interface LeadSummary {
     createdAt: Date;
     proposedSlots: Array<{
       date: string;
-      period: "MORNING" | "AFTERNOON" | "EVENING";
+      hour: number;
     }>;
+    acceptedSlotAt: Date | null;
+    contractPdfUrl: string | null;
+    contractDocxUrl: string | null;
+    contractRef: string | null;
   } | null;
 }
 
-type ProposedSlot = { date: string; period: "MORNING" | "AFTERNOON" | "EVENING" };
+type ProposedSlot = { date: string; hour: number };
+
+const SLOT_HOUR_MIN = 7;
+const SLOT_HOUR_MAX = 20; // 20:00 is the last selectable hour (covers 20-21)
+
+// Back-compat: old slots stored period MORNING/AFTERNOON/EVENING.
+const LEGACY_PERIOD_HOUR: Record<string, number> = {
+  MORNING: 9,
+  AFTERNOON: 13,
+  EVENING: 18,
+};
+
 function parseSlots(json: unknown): ProposedSlot[] {
   if (!Array.isArray(json)) return [];
-  return json.filter(
-    (s): s is ProposedSlot =>
-      !!s &&
-      typeof s === "object" &&
-      typeof (s as ProposedSlot).date === "string" &&
-      ["MORNING", "AFTERNOON", "EVENING"].includes((s as ProposedSlot).period),
-  );
+  const out: ProposedSlot[] = [];
+  for (const raw of json) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw as { date?: unknown; hour?: unknown; period?: unknown };
+    if (typeof s.date !== "string") continue;
+    let hour: number | null = null;
+    if (typeof s.hour === "number" && Number.isFinite(s.hour)) {
+      hour = Math.round(s.hour);
+    } else if (typeof s.period === "string" && s.period in LEGACY_PERIOD_HOUR) {
+      hour = LEGACY_PERIOD_HOUR[s.period];
+    }
+    if (hour == null) continue;
+    if (hour < SLOT_HOUR_MIN || hour > SLOT_HOUR_MAX) continue;
+    out.push({ date: s.date, hour });
+  }
+  return out;
 }
 
 /**
@@ -163,6 +187,10 @@ export async function listLeads(): Promise<LeadSummary[]> {
           validUntil: r.offers[0].validUntil,
           createdAt: r.offers[0].createdAt,
           proposedSlots: parseSlots(r.offers[0].proposedSlotsJson),
+          acceptedSlotAt: r.offers[0].acceptedSlotAt ?? null,
+          contractPdfUrl: r.offers[0].contractPdfUrl ?? null,
+          contractDocxUrl: r.offers[0].contractDocxUrl ?? null,
+          contractRef: r.offers[0].contractRef ?? null,
         }
       : null,
   }));
@@ -203,7 +231,12 @@ export async function getLead(id: string): Promise<LeadDetail | null> {
       },
     },
   });
-  if (!r || r.status !== "PUBLISHED") return null;
+  // Allow access to PUBLISHED (open) and post-acceptance states (AWARDED/COMPLETED)
+  // so the carrier can still view the project + download the contract.
+  if (!r) return null;
+  if (r.status !== "PUBLISHED" && r.status !== "AWARDED" && r.status !== "COMPLETED") {
+    return null;
+  }
   const items =
     (r.itemsJson as unknown as LeadDetail["items"] | null) ?? [];
   return {
@@ -243,6 +276,10 @@ export async function getLead(id: string): Promise<LeadDetail | null> {
           validUntil: r.offers[0].validUntil,
           createdAt: r.offers[0].createdAt,
           proposedSlots: parseSlots(r.offers[0].proposedSlotsJson),
+          acceptedSlotAt: r.offers[0].acceptedSlotAt ?? null,
+          contractPdfUrl: r.offers[0].contractPdfUrl ?? null,
+          contractDocxUrl: r.offers[0].contractDocxUrl ?? null,
+          contractRef: r.offers[0].contractRef ?? null,
         }
       : null,
     items: items.map((it) => ({
@@ -268,7 +305,7 @@ export async function getLead(id: string): Promise<LeadDetail | null> {
 
 const slotSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD"),
-  period: z.enum(["MORNING", "AFTERNOON", "EVENING"]),
+  hour: z.coerce.number().int().min(SLOT_HOUR_MIN).max(SLOT_HOUR_MAX),
 });
 
 const offerSchema = z.object({
@@ -277,7 +314,10 @@ const offerSchema = z.object({
   estimatedDays: z.coerce.number().int().positive().nullable().optional(),
   notes: z.string().max(2000).optional(),
   validDays: z.coerce.number().int().min(1).max(60).default(7),
-  proposedSlots: z.array(slotSchema).max(20).optional(),
+  proposedSlots: z
+    .array(slotSchema)
+    .min(1, "Πρέπει να προτείνεις τουλάχιστον ένα slot.")
+    .max(60),
 });
 
 export type SubmitOfferResult =
@@ -392,6 +432,15 @@ export interface MyOffer {
   status: string;
   validUntil: Date;
   createdAt: Date;
+  /** Anonymized competitive intel — lowest OPEN offer on the same request from
+   * a *different* carrier. Null if no competing offers exist. The carrier sees
+   * the price but never the competitor's identity. */
+  competition: {
+    lowestCents: number;
+    totalOpenCompetitors: number;
+    /** True if my offer is the current lowest among OPEN offers */
+    iAmLowest: boolean;
+  } | null;
   request: {
     type: string;
     fromLocality: string;
@@ -422,25 +471,64 @@ export async function listMyOffers(): Promise<MyOffer[]> {
       },
     },
   });
-  return rows.map((o) => ({
-    id: o.id,
-    moveRequestId: o.moveRequestId,
-    priceCents: o.priceCents,
-    estimatedDays: o.estimatedDays,
-    notes: o.notes,
-    status: o.status,
-    validUntil: o.validUntil,
-    createdAt: o.createdAt,
-    request: {
-      type: o.moveRequest.type,
-      fromLocality: anonymizeAddress(o.moveRequest.fromAddress),
-      toLocality: anonymizeAddress(o.moveRequest.toAddress),
-      preferredDate: o.moveRequest.preferredDate,
-      itemsCount: o.moveRequest.itemsCount,
-      totalVolumeM3: o.moveRequest.totalVolumeM3,
-      status: o.moveRequest.status,
+
+  // Fetch all OPEN offers from OTHER carriers on the same MoveRequests in one
+  // round-trip, then group in memory.
+  const requestIds = Array.from(new Set(rows.map((r) => r.moveRequestId)));
+  const competing = await db.offer.findMany({
+    where: {
+      moveRequestId: { in: requestIds },
+      carrierUserId: { not: userId },
+      status: "OPEN",
     },
-  }));
+    select: { moveRequestId: true, priceCents: true },
+  });
+  const compByRequest = new Map<
+    string,
+    { lowest: number; count: number }
+  >();
+  for (const c of competing) {
+    const cur = compByRequest.get(c.moveRequestId);
+    if (!cur) {
+      compByRequest.set(c.moveRequestId, {
+        lowest: c.priceCents,
+        count: 1,
+      });
+    } else {
+      cur.lowest = Math.min(cur.lowest, c.priceCents);
+      cur.count += 1;
+    }
+  }
+
+  return rows.map((o) => {
+    const comp = compByRequest.get(o.moveRequestId) ?? null;
+    return {
+      id: o.id,
+      moveRequestId: o.moveRequestId,
+      priceCents: o.priceCents,
+      estimatedDays: o.estimatedDays,
+      notes: o.notes,
+      status: o.status,
+      validUntil: o.validUntil,
+      createdAt: o.createdAt,
+      competition: comp
+        ? {
+            lowestCents: comp.lowest,
+            totalOpenCompetitors: comp.count,
+            iAmLowest: o.priceCents < comp.lowest,
+          }
+        : null,
+      request: {
+        type: o.moveRequest.type,
+        fromLocality: anonymizeAddress(o.moveRequest.fromAddress),
+        toLocality: anonymizeAddress(o.moveRequest.toAddress),
+        preferredDate: o.moveRequest.preferredDate,
+        itemsCount: o.moveRequest.itemsCount,
+        totalVolumeM3: o.moveRequest.totalVolumeM3,
+        status: o.moveRequest.status,
+      },
+    };
+  });
 }
 
 export interface CarrierVehicleOption {

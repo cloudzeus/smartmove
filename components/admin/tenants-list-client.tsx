@@ -22,6 +22,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { SendOtpButton } from "./send-otp-button";
+import { SetPasswordButton } from "./set-password-button";
 
 export interface AdminTenantRow {
   id: string;
@@ -275,6 +276,7 @@ function TenantAccordionRow({
         <StatusBadge status={t.status} />
 
         <SendOtpButton tenantId={t.id} />
+        <SetPasswordButton tenantId={t.id} />
 
         <Link
           href={`/admin/tenants/${t.id}`}

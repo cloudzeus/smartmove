@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-23T09:16:29.307Z",
+  "timestamp": "2026-05-25T10:13:25.930Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -21,114 +21,10 @@
       "path": ".planning/HANDOFF.json"
     },
     {
-      "status": "M",
-      "path": "app/carrier/branches/page.tsx"
-    },
-    {
-      "status": "M",
-      "path": "app/carrier/employees/page.tsx"
-    },
-    {
-      "status": "M",
-      "path": "app/carrier/leads/[id]/page.tsx"
-    },
-    {
-      "status": "M",
-      "path": "app/carrier/partners/companies/[id]/page.tsx"
-    },
-    {
-      "status": "M",
-      "path": "app/carrier/projects/[id]/page.tsx"
-    },
-    {
-      "status": "M",
-      "path": "app/carrier/projects/page.tsx"
-    },
-    {
-      "status": "M",
-      "path": "components/carrier/employees-client.tsx"
-    },
-    {
-      "status": "M",
-      "path": "components/carrier/partner-company-detail-client.tsx"
-    },
-    {
-      "status": "M",
-      "path": "components/carrier/partner-quote-section.tsx"
-    },
-    {
-      "status": "M",
-      "path": "components/carrier/project-detail-client.tsx"
-    },
-    {
-      "status": "M",
-      "path": "components/carrier/tasks-master-client.tsx"
-    },
-    {
-      "status": "M",
-      "path": "components/dashboard/request-map.tsx"
-    },
-    {
-      "status": "M",
-      "path": "components/shared/page-hero.tsx"
-    },
-    {
-      "status": "M",
-      "path": "lib/contract.ts"
-    },
-    {
-      "status": "M",
-      "path": "prisma/schema.prisma"
-    },
-    {
-      "status": "M",
-      "path": "server/actions/carrier-employees.action.ts"
-    },
-    {
       "status": "??",
-      "path": "components/carrier/branch-location-editor.tsx"
-    },
-    {
-      "status": "??",
-      "path": "components/carrier/branch-offerings-editor.tsx"
-    },
-    {
-      "status": "??",
-      "path": "components/carrier/partner-coverage-map.tsx"
-    },
-    {
-      "status": "??",
-      "path": "components/carrier/partner-service-area-editor.tsx"
-    },
-    {
-      "status": "??",
-      "path": "lib/branch-offerings.ts"
-    },
-    {
-      "status": "??",
-      "path": "lib/partner-service-area.ts"
-    },
-    {
-      "status": "??",
-      "path": "scripts/migrations/"
-    },
-    {
-      "status": "??",
-      "path": "server/actions/branch-offerings.action.ts"
-    },
-    {
-      "status": "??",
-      "path": "server/actions/carrier-branches.action.ts"
-    },
-    {
-      "status": "??",
-      "path": "server/actions/geocode.action.ts"
-    },
-    {
-      "status": "??",
-      "path": "server/actions/partner-service-area.action.ts"
+      "path": "components/carrier/employee-schedule-client.tsx"
     }
   ],
   "next_action": null,
-  "context_notes": "Recent commits:\n8ba3100 carrier admin section improovements\nd241769 ui improove\n94bc86b camera pro problem\n59661c9 camera pro problem\n8077e2e camera pro problem"
+  "context_notes": "Recent commits:\nbad751c more ui fixes\n8ba3100 carrier admin section improovements\nd241769 ui improove\n94bc86b camera pro problem\n59661c9 camera pro problem"
 }

@@ -260,53 +260,70 @@ function buildContent(d: ContractData) {
 // ---------------- DOCX ----------------
 
 function docxKvTable(b: Block): (Paragraph | Table)[] {
-  const heading = new Paragraph({
-    spacing: { before: 280, after: 120 },
+  const spacer = new Paragraph({ spacing: { before: 240, after: 0 }, children: [] });
+
+  // Eyebrow header row spanning both columns
+  const headerRow = new TableRow({
     children: [
-      new TextRun({
-        text: b.heading,
-        bold: true,
-        size: 22,
-        color: BRAND.blueDeep,
-        font: "Inter",
+      new TableCell({
+        columnSpan: 2,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        verticalAlign: VerticalAlign.CENTER,
+        shading: { type: ShadingType.SOLID, color: BRAND.blueLight, fill: BRAND.blueLight },
+        children: [
+          new Paragraph({
+            spacing: { before: 80, after: 80 },
+            children: [
+              new TextRun({
+                text: b.heading.toUpperCase(),
+                bold: true,
+                size: 18,
+                color: BRAND.blueDeep,
+                font: "Calibri",
+                characterSpacing: 24,
+              }),
+            ],
+          }),
+        ],
       }),
     ],
   });
-  const rows = b.rows.map(
+
+  const dataRows = b.rows.map(
     ([label, value]) =>
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 35, type: WidthType.PERCENTAGE },
+            width: { size: 32, type: WidthType.PERCENTAGE },
             verticalAlign: VerticalAlign.CENTER,
-            shading: { type: ShadingType.SOLID, color: BRAND.surface, fill: BRAND.surface },
             children: [
               new Paragraph({
-                spacing: { before: 60, after: 60 },
+                spacing: { before: 80, after: 80 },
                 children: [
                   new TextRun({
-                    text: label,
+                    text: label.toUpperCase(),
                     bold: true,
-                    size: 18,
+                    size: 16,
                     color: BRAND.muted,
-                    font: "Inter",
+                    font: "Calibri",
+                    characterSpacing: 12,
                   }),
                 ],
               }),
             ],
           }),
           new TableCell({
-            width: { size: 65, type: WidthType.PERCENTAGE },
+            width: { size: 68, type: WidthType.PERCENTAGE },
             verticalAlign: VerticalAlign.CENTER,
             children: [
               new Paragraph({
-                spacing: { before: 60, after: 60 },
+                spacing: { before: 80, after: 80 },
                 children: [
                   new TextRun({
                     text: value,
                     size: 20,
                     color: BRAND.foreground,
-                    font: "Inter",
+                    font: "Calibri",
                   }),
                 ],
               }),
@@ -315,23 +332,25 @@ function docxKvTable(b: Block): (Paragraph | Table)[] {
         ],
       }),
   );
+
   const table = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    rows,
+    rows: [headerRow, ...dataRows],
     borders: kvBorders(),
   });
-  return [heading, table];
+  return [spacer, table];
 }
 
 function kvBorders() {
   const c = { style: BorderStyle.SINGLE, size: 4, color: BRAND.border };
+  const none = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
   return {
     top: c,
     bottom: c,
     left: c,
     right: c,
     insideHorizontal: c,
-    insideVertical: c,
+    insideVertical: none,
   };
 }
 
@@ -346,7 +365,7 @@ function docxItemsBlock(d: ContractData, photos: Map<string, FetchedPhoto>): (Pa
         bold: true,
         size: 22,
         color: BRAND.blueDeep,
-        font: "Inter",
+        font: "Calibri",
       }),
     ],
   });
@@ -357,14 +376,14 @@ function docxItemsBlock(d: ContractData, photos: Map<string, FetchedPhoto>): (Pa
         text: `${d.items.reduce((s, i) => s + i.quantity, 0)} αντικείμενα · `,
         size: 18,
         color: BRAND.muted,
-        font: "Inter",
+        font: "Calibri",
       }),
       new TextRun({
         text: `${d.request.volumeM3.toFixed(2)} m³ συνολικά`,
         size: 18,
         bold: true,
         color: BRAND.foreground,
-        font: "Inter",
+        font: "Calibri",
       }),
     ],
   });
@@ -405,7 +424,7 @@ function docxItemsBlock(d: ContractData, photos: Map<string, FetchedPhoto>): (Pa
                   text: "—",
                   size: 18,
                   color: BRAND.muted,
-                  font: "Inter",
+                  font: "Calibri",
                 }),
               ],
             }),
@@ -426,7 +445,7 @@ function docxItemsBlock(d: ContractData, photos: Map<string, FetchedPhoto>): (Pa
                   size: 20,
                   bold: true,
                   color: BRAND.foreground,
-                  font: "Inter",
+                  font: "Calibri",
                 }),
               ],
             }),
@@ -444,7 +463,7 @@ function docxItemsBlock(d: ContractData, photos: Map<string, FetchedPhoto>): (Pa
                   size: 20,
                   bold: true,
                   color: BRAND.foreground,
-                  font: "Inter",
+                  font: "Calibri",
                 }),
               ],
             }),
@@ -460,7 +479,7 @@ function docxItemsBlock(d: ContractData, photos: Map<string, FetchedPhoto>): (Pa
                   text: `${it.length_cm}×${it.width_cm}×${it.height_cm}`,
                   size: 18,
                   color: BRAND.muted,
-                  font: "Inter",
+                  font: "Calibri",
                 }),
               ],
             }),
@@ -478,7 +497,7 @@ function docxItemsBlock(d: ContractData, photos: Map<string, FetchedPhoto>): (Pa
                   size: 18,
                   bold: true,
                   color: BRAND.foreground,
-                  font: "Inter",
+                  font: "Calibri",
                 }),
               ],
             }),
@@ -513,7 +532,7 @@ function itemHeaderCell(text: string, widthPct: number): TableCell {
             bold: true,
             size: 16,
             color: BRAND.blueDeep,
-            font: "Inter",
+            font: "Calibri",
           }),
         ],
       }),
@@ -550,7 +569,7 @@ async function buildDocxBuffer(
                     bold: true,
                     size: 28,
                     color: BRAND.blue,
-                    font: "Inter",
+                    font: "Calibri",
                   }),
                 ],
               }),
@@ -560,7 +579,7 @@ async function buildDocxBuffer(
                     text: "Ψηφιακή πλατφόρμα μεταφορών",
                     size: 16,
                     color: BRAND.muted,
-                    font: "Inter",
+                    font: "Calibri",
                   }),
                 ],
               }),
@@ -578,7 +597,7 @@ async function buildDocxBuffer(
                     bold: true,
                     size: 16,
                     color: BRAND.muted,
-                    font: "Inter",
+                    font: "Calibri",
                   }),
                 ],
               }),
@@ -590,7 +609,7 @@ async function buildDocxBuffer(
                     bold: true,
                     size: 24,
                     color: BRAND.foreground,
-                    font: "Inter",
+                    font: "Calibri",
                   }),
                 ],
               }),
@@ -601,7 +620,7 @@ async function buildDocxBuffer(
                     text: fmtDateTime(d.generatedAt),
                     size: 14,
                     color: BRAND.muted,
-                    font: "Inter",
+                    font: "Calibri",
                   }),
                 ],
               }),
@@ -622,7 +641,7 @@ async function buildDocxBuffer(
         bold: true,
         size: 36,
         color: BRAND.foreground,
-        font: "Inter",
+        font: "Calibri",
       }),
     ],
   });
@@ -635,7 +654,7 @@ async function buildDocxBuffer(
         text: c.preamble,
         size: 20,
         color: BRAND.foreground,
-        font: "Inter",
+        font: "Calibri",
       }),
     ],
   });
@@ -653,7 +672,7 @@ async function buildDocxBuffer(
         bold: true,
         size: 22,
         color: BRAND.blueDeep,
-        font: "Inter",
+        font: "Calibri",
       }),
     ],
   });
@@ -666,7 +685,7 @@ async function buildDocxBuffer(
           bold: true,
           size: 19,
           color: BRAND.foreground,
-          font: "Inter",
+          font: "Calibri",
         }),
       ],
     }),
@@ -678,7 +697,7 @@ async function buildDocxBuffer(
           text: t.body,
           size: 18,
           color: BRAND.foreground,
-          font: "Inter",
+          font: "Calibri",
         }),
       ],
     }),
@@ -693,7 +712,7 @@ async function buildDocxBuffer(
         italics: true,
         size: 16,
         color: BRAND.muted,
-        font: "Inter",
+        font: "Calibri",
       }),
     ],
   });
@@ -703,7 +722,7 @@ async function buildDocxBuffer(
     title: `Σύμφωνητικό μεταφοράς ${d.ref}`,
     styles: {
       default: {
-        document: { run: { font: "Inter" } },
+        document: { run: { font: "Calibri" } },
       },
     },
     sections: [
@@ -856,44 +875,48 @@ function drawHeader(doc: PDFDoc, d: ContractData, pageW: number) {
   // Left: brand
   doc
     .font("Bold")
-    .fontSize(24)
+    .fontSize(22)
     .fillColor(PDF.hex(BRAND.blue))
     .text("SmartMove", leftX, startY, { width: pageW * 0.6 });
   doc
     .font("Regular")
-    .fontSize(9)
+    .fontSize(8.5)
     .fillColor(PDF.hex(BRAND.muted))
-    .text("Ψηφιακή πλατφόρμα μεταφορών", leftX, doc.y, { width: pageW * 0.6 });
+    .text("Ψηφιακή πλατφόρμα μεταφορών", leftX, doc.y + 2, { width: pageW * 0.6 });
 
-  // Right: ref + date
-  const rightX = leftX + pageW * 0.6;
+  // Right: ref pill (offer-card style) + date
+  const rightX = leftX + pageW * 0.55;
   doc
     .font("SemiBold")
-    .fontSize(8.5)
+    .fontSize(8)
     .fillColor(PDF.hex(BRAND.muted))
-    .text("ΣΥΜΦΩΝΗΤΙΚΟ", rightX, startY, { width: pageW * 0.4, align: "right" });
+    .text("ΣΥΜΦΩΝΗΤΙΚΟ", rightX, startY, {
+      width: pageW * 0.45,
+      align: "right",
+      characterSpacing: 1.2,
+    });
   doc
     .font("Bold")
-    .fontSize(14)
+    .fontSize(15)
     .fillColor(PDF.hex(BRAND.foreground))
-    .text(d.ref, rightX, doc.y, { width: pageW * 0.4, align: "right" });
+    .text(d.ref, rightX, doc.y + 1, { width: pageW * 0.45, align: "right" });
   doc
     .font("Regular")
-    .fontSize(8.5)
+    .fontSize(8)
     .fillColor(PDF.hex(BRAND.muted))
-    .text(fmtDateTime(d.generatedAt), rightX, doc.y, {
-      width: pageW * 0.4,
+    .text(fmtDateTime(d.generatedAt), rightX, doc.y + 1, {
+      width: pageW * 0.45,
       align: "right",
     });
 
   // Sync cursor below both columns
   doc.x = leftX;
-  doc.y = startY + 60;
+  doc.y = startY + 56;
 
-  // Bottom border (brand-blue bar)
+  // Thin accent bar (1px) — restrained, no thick stripe
   doc
     .save()
-    .lineWidth(2)
+    .lineWidth(1)
     .strokeColor(PDF.hex(BRAND.blue))
     .moveTo(leftX, doc.y)
     .lineTo(leftX + pageW, doc.y)
@@ -902,58 +925,75 @@ function drawHeader(doc: PDFDoc, d: ContractData, pageW: number) {
 }
 
 function drawKvBlock(doc: PDFDoc, b: Block, pageW: number) {
-  doc.moveDown(0.8);
-  doc
-    .font("Bold")
-    .fontSize(11.5)
-    .fillColor(PDF.hex(BRAND.blueDeep))
-    .text(b.heading);
-  doc.moveDown(0.3);
-
+  doc.moveDown(0.7);
   const leftX = doc.page.margins.left;
-  const labelW = pageW * 0.35;
+  const labelW = pageW * 0.32;
   const valueX = leftX + labelW;
   const valueW = pageW - labelW;
 
+  // ── Eyebrow header strip (offer-card aesthetic):
+  // light blue tint background + small uppercase title in deep blue.
+  const headerH = 22;
+  const headerY = doc.y;
+  doc
+    .save()
+    .rect(leftX, headerY, pageW, headerH)
+    .fillColor(PDF.hex(BRAND.blueLight))
+    .fill()
+    .restore();
+  doc
+    .font("SemiBold")
+    .fontSize(9)
+    .fillColor(PDF.hex(BRAND.blueDeep))
+    .text(b.heading.toUpperCase(), leftX + 10, headerY + 6, {
+      width: pageW - 20,
+      characterSpacing: 1.2,
+    });
+  // Top + bottom hairlines on header
+  doc
+    .save()
+    .lineWidth(0.5)
+    .strokeColor(PDF.hex(BRAND.border))
+    .moveTo(leftX, headerY)
+    .lineTo(leftX + pageW, headerY)
+    .stroke()
+    .moveTo(leftX, headerY + headerH)
+    .lineTo(leftX + pageW, headerY + headerH)
+    .stroke()
+    .restore();
+  doc.y = headerY + headerH;
+
+  // ── Rows: no heavy borders, only subtle bottom hairline per row.
   for (const [label, value] of b.rows) {
     const startY = doc.y;
     const valueHeight = doc
       .font("Regular")
       .fontSize(10)
-      .heightOfString(value, { width: valueW });
-    const rowH = Math.max(20, valueHeight + 8);
+      .heightOfString(value, { width: valueW - 14 });
+    const rowH = Math.max(22, valueHeight + 10);
 
-    // Label cell
-    doc
-      .save()
-      .rect(leftX, startY, labelW, rowH)
-      .fillColor(PDF.hex(BRAND.surface))
-      .fill()
-      .restore();
     doc
       .font("SemiBold")
-      .fontSize(9)
+      .fontSize(8.5)
       .fillColor(PDF.hex(BRAND.muted))
-      .text(label, leftX + 8, startY + 5, {
-        width: labelW - 12,
+      .text(label.toUpperCase(), leftX + 10, startY + 7, {
+        width: labelW - 14,
+        characterSpacing: 0.6,
       });
 
-    // Value
     doc
       .font("Regular")
       .fontSize(10)
       .fillColor(PDF.hex(BRAND.foreground))
-      .text(value, valueX + 10, startY + 5, { width: valueW - 14 });
+      .text(value, valueX, startY + 6, { width: valueW - 6 });
 
-    // Borders
+    // Bottom divider only
     doc
       .save()
-      .lineWidth(0.5)
+      .lineWidth(0.4)
       .strokeColor(PDF.hex(BRAND.border))
-      .rect(leftX, startY, pageW, rowH)
-      .stroke()
-      .moveTo(valueX, startY)
-      .lineTo(valueX, startY + rowH)
+      .moveTo(leftX, startY + rowH)
+      .lineTo(leftX + pageW, startY + rowH)
       .stroke()
       .restore();
 

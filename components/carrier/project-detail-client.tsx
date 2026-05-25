@@ -245,19 +245,19 @@ export function ProjectDetailClient({
   };
 
   return (
-    <>
+    <div className="space-y-3">
       {/* Status toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+      <div className="cx-card flex flex-wrap items-center justify-between gap-3 px-3 py-2">
         <div className="flex items-center gap-3">
           <ProgressPill tasks={allTasks} />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Project status:</span>
+          <span className="cx-eyebrow">Status</span>
           <select
             value={project.status}
             disabled={pending}
             onChange={(e) => updateStatus(e.target.value)}
-            className="h-8 rounded-lg border border-border bg-white px-2 text-xs font-bold"
+            className="h-7 rounded-md border border-border bg-background px-2 text-[12px] font-semibold outline-none focus:border-[var(--cx-accent)] focus:ring-1 focus:ring-[var(--cx-accent)]"
           >
             <option value="DRAFT">Προσχέδιο</option>
             <option value="PLANNED">Προγραμματισμένο</option>
@@ -269,7 +269,7 @@ export function ProjectDetailClient({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border overflow-x-auto">
+      <div className="flex flex-wrap gap-x-1 gap-y-0.5 border-b border-border">
         <TabButton active={tab === "plan"}   onClick={() => setTab("plan")}   icon={ClipboardList}     label="Πλάνο" />
         <TabButton active={tab === "kanban"} onClick={() => setTab("kanban")} icon={KanbanSquare}      label="Kanban" count={allTasks.length} />
         <TabButton active={tab === "gantt"}  onClick={() => setTab("gantt")}  icon={GanttChartSquare}  label="Gantt" />
@@ -311,7 +311,7 @@ export function ProjectDetailClient({
       )}
       {tab === "flow" && <FlowView project={project} />}
       {tab === "history" && <HistoryTimeline events={history} />}
-    </>
+    </div>
   );
 }
 
@@ -531,7 +531,7 @@ function DayGantt({
     : 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-md border border-border bg-card shadow-sm">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary/30 px-4 py-2.5">
         <div className="flex items-center gap-1">
@@ -623,10 +623,10 @@ function DayGantt({
                       className="sticky left-0 z-[5] flex items-center gap-2 border-r border-border bg-card px-3 py-2"
                       style={{ width: DAY_LABEL_WIDTH }}
                     >
-                      <div className="grid size-7 place-items-center rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 text-[10px] font-extrabold text-white">
+                      <div className="grid size-6 place-items-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
                         {lane.label.charAt(0).toUpperCase()}
                       </div>
-                      <span className="truncate text-xs font-bold">{lane.label}</span>
+                      <span className="truncate text-[12px] font-semibold">{lane.label}</span>
                     </div>
                     <div
                       className="relative flex-1"
@@ -669,7 +669,7 @@ function DayGantt({
                                 });
                               }}
                               onMouseLeave={() => setTooltipBar(null)}
-                              className={`absolute cursor-pointer overflow-hidden rounded-lg border-2 text-left shadow-sm transition hover:z-10 hover:shadow-md hover:scale-[1.02] ${meta.tone} ${statusMeta.tone.split(" ").filter((c) => c.startsWith("border")).join(" ")}`}
+                              className={`absolute cursor-pointer overflow-hidden rounded-lg border text-left cx-transition hover:z-10 hover:bg-[var(--cx-hover)]  ${meta.tone} ${statusMeta.tone.split(" ").filter((c) => c.startsWith("border")).join(" ")}`}
                               style={{ left, width, top, height }}
                             >
                               <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusMeta.accent}`} />
@@ -868,291 +868,386 @@ function serviceToCategory(s: ServiceType): GanttTask["category"] {
 
 // ─────────────────────── FLOW VIEW (SVG node graph) ───────────────────────
 
-function FlowView({ project }: { project: ProjectData }) {
-  const STOP_W = 200;
-  const SVC_W = 200;
-  const TASK_W = 220;
-  const COL_GAP = 80;
-  const ROW_GAP = 16;
-  const NODE_H = 52;
+const FLOW_TASK_STATUS: Record<string, { dot: string; label: string; rail: string; tint: string }> = {
+  PLANNED:     { dot: "bg-sky-500",     label: "Προγραμ.",  rail: "bg-sky-500",     tint: "bg-sky-50/40" },
+  CONFIRMED:   { dot: "bg-indigo-500",  label: "Επιβεβ.",   rail: "bg-indigo-500",  tint: "bg-indigo-50/40" },
+  IN_PROGRESS: { dot: "bg-amber-500",   label: "Σε εξέλιξη",rail: "bg-amber-500",   tint: "bg-amber-50/40" },
+  DONE:        { dot: "bg-emerald-500", label: "Done",      rail: "bg-emerald-500", tint: "bg-emerald-50/40" },
+  BLOCKED:     { dot: "bg-rose-500",    label: "Μπλοκ.",    rail: "bg-rose-500",    tint: "bg-rose-50/40" },
+  CANCELLED:   { dot: "bg-zinc-400",    label: "Ακυρ.",     rail: "bg-zinc-400",    tint: "bg-zinc-50/40" },
+  EMPTY:       { dot: "bg-muted-foreground/40", label: "—", rail: "bg-muted-foreground/40", tint: "bg-muted/30" },
+};
 
-  // Compute layout: vertical stack of service rows, each with stop label on
-  // left, service in middle, list of tasks/quotes on right.
-  let y = 20;
-  const stopLayouts: Array<{
-    stop: StopRow;
-    yStart: number;
-    yEnd: number;
-    services: Array<{
-      svc: ServiceRow;
-      y: number;
-      nodes: Array<{ y: number; kind: "task" | "quote"; label: string; meta: string; status: string }>;
-    }>;
-  }> = [];
+const FLOW_QUOTE_STATUS: Record<string, { dot: string; label: string; rail: string; tint: string }> = {
+  PENDING:   { dot: "bg-amber-500",   label: "Στάλθηκε",     rail: "bg-amber-500",   tint: "bg-amber-50/40" },
+  QUOTED:    { dot: "bg-emerald-500", label: "Έλαβες προσφορά", rail: "bg-emerald-500", tint: "bg-emerald-50/40" },
+  ACCEPTED:  { dot: "bg-indigo-500",  label: "Επιλέχθηκε",   rail: "bg-indigo-500",  tint: "bg-indigo-50/40" },
+  DECLINED:  { dot: "bg-rose-500",    label: "Αρνήθηκε",     rail: "bg-rose-500",    tint: "bg-rose-50/40" },
+  EXPIRED:   { dot: "bg-zinc-400",    label: "Έληξε",        rail: "bg-zinc-400",    tint: "bg-zinc-50/40" },
+};
 
+interface FlowPhase {
+  id: string;
+  kind: "PREP" | "PICKUP" | "TRANSIT" | "DELIVERY";
+  title: string;
+  subtitle: string;
+  startAt: Date | null;
+  endAt: Date | null;
+  tasks: Array<{
+    id: string;
+    title: string;
+    durationMinutes: number;
+    status: string;
+    serviceType: ServiceType;
+    assigneeName: string | null;
+    assigneeKind: "EMPLOYEE" | "PARTNER" | null;
+  }>;
+  quotes: Array<{
+    id: string;
+    label: string;
+    status: string;
+    price: number | null;
+    serviceType: ServiceType;
+  }>;
+}
+
+function buildFlowPhases(project: ProjectData): FlowPhase[] {
+  const phases: FlowPhase[] = [];
+
+  // PREP — tasks with category=PREP, no specific stop
+  const prepTasks: FlowPhase["tasks"] = [];
   for (const stop of project.stops) {
-    const yStart = y;
-    const services: typeof stopLayouts[number]["services"] = [];
     for (const svc of stop.services) {
-      const svcY = y;
-      const nodes: typeof services[number]["nodes"] = [];
-      let innerY = y;
       for (const t of svc.tasks) {
-        nodes.push({
-          y: innerY,
-          kind: "task",
-          label: t.title.slice(0, 28),
-          meta:
-            t.assigneeEmployee?.name ??
-            t.assigneePartner?.name ??
-            "Χωρίς ανάθεση",
-          status: t.status,
-        });
-        innerY += NODE_H + ROW_GAP;
+        if (svc.serviceType === "PACKING" || svc.serviceType === "DISASSEMBLY") {
+          prepTasks.push({
+            id: t.id,
+            title: t.title,
+            durationMinutes: t.durationMinutes,
+            status: t.status,
+            serviceType: svc.serviceType,
+            assigneeName: t.assigneeEmployee?.name ?? t.assigneePartner?.name ?? null,
+            assigneeKind: t.assigneeEmployee ? "EMPLOYEE" : t.assigneePartner ? "PARTNER" : null,
+          });
+        }
       }
-      for (const q of svc.quoteRequests.filter((q) => q.status !== "LOST" && q.status !== "CANCELLED")) {
-        nodes.push({
-          y: innerY,
-          kind: "quote",
-          label: q.partner?.name ?? q.recipientName ?? "—",
-          meta:
-            q.status === "QUOTED" && q.quotedPriceCents != null
-              ? `Προσφορά ${(q.quotedPriceCents / 100).toLocaleString("el-GR")}€`
-              : q.status,
-          status: q.status,
-        });
-        innerY += NODE_H + ROW_GAP;
-      }
-      if (nodes.length === 0) {
-        nodes.push({
-          y: innerY,
-          kind: "task",
-          label: "(καμία ανάθεση)",
-          meta: "",
-          status: "EMPTY",
-        });
-        innerY += NODE_H + ROW_GAP;
-      }
-      services.push({ svc, y: svcY, nodes });
-      y = innerY;
     }
-    stopLayouts.push({ stop, yStart, yEnd: y, services });
-    y += 30;
   }
-  const totalH = Math.max(200, y + 20);
-  const totalW = STOP_W + COL_GAP + SVC_W + COL_GAP + TASK_W + 40;
+  if (prepTasks.length > 0) {
+    const starts = prepTasks.map((t) => new Date()).sort();
+    phases.push({
+      id: "phase-prep",
+      kind: "PREP",
+      title: "Προετοιμασία",
+      subtitle: "Πακετάρισμα / αποσυναρμολόγηση",
+      startAt: starts[0] ?? null,
+      endAt: null,
+      tasks: prepTasks,
+      quotes: [],
+    });
+  }
+
+  // For each stop, produce: PICKUP/DELIVERY phase + TRANSIT (if not last)
+  for (let i = 0; i < project.stops.length; i++) {
+    const stop = project.stops[i];
+    const isPickup = stop.type === "PICKUP";
+
+    const stopTasks: FlowPhase["tasks"] = [];
+    const stopQuotes: FlowPhase["quotes"] = [];
+    const transitTasks: FlowPhase["tasks"] = [];
+    const transitQuotes: FlowPhase["quotes"] = [];
+
+    for (const svc of stop.services) {
+      const isPrep = svc.serviceType === "PACKING" || svc.serviceType === "DISASSEMBLY";
+      if (isPrep) continue; // already in PREP
+
+      const isTransit = svc.serviceType === "TRANSIT";
+
+      const taskList = svc.tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        durationMinutes: t.durationMinutes,
+        status: t.status,
+        serviceType: svc.serviceType,
+        assigneeName: t.assigneeEmployee?.name ?? t.assigneePartner?.name ?? null,
+        assigneeKind: t.assigneeEmployee ? "EMPLOYEE" as const : t.assigneePartner ? "PARTNER" as const : null,
+      }));
+      const quoteList = svc.quoteRequests
+        .filter((q) => q.status !== "LOST" && q.status !== "CANCELLED")
+        .map((q) => ({
+          id: q.id,
+          label: q.partner?.name ?? q.recipientName ?? "—",
+          status: q.status,
+          price: q.quotedPriceCents != null ? q.quotedPriceCents / 100 : null,
+          serviceType: svc.serviceType,
+        }));
+
+      if (isTransit) {
+        transitTasks.push(...taskList);
+        transitQuotes.push(...quoteList);
+      } else {
+        stopTasks.push(...taskList);
+        stopQuotes.push(...quoteList);
+      }
+    }
+
+    // Time range from tasks
+    const allDates = stopTasks.flatMap((t) => {
+      const matching = stop.services.flatMap((s) => s.tasks).find((tt) => tt.id === t.id);
+      return matching ? [new Date(matching.startAt)] : [];
+    });
+    const stopStart = allDates.sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+
+    if (stopTasks.length > 0 || stopQuotes.length > 0) {
+      phases.push({
+        id: `phase-stop-${stop.id}`,
+        kind: isPickup ? "PICKUP" : "DELIVERY",
+        title: isPickup ? "Παραλαβή" : "Παράδοση",
+        subtitle: stop.label || stop.address,
+        startAt: stopStart,
+        endAt: null,
+        tasks: stopTasks,
+        quotes: stopQuotes,
+      });
+    }
+
+    // TRANSIT phase between this stop and the next
+    if (transitTasks.length > 0 || transitQuotes.length > 0) {
+      const next = project.stops[i + 1];
+      phases.push({
+        id: `phase-transit-${stop.id}`,
+        kind: "TRANSIT",
+        title: "Διαδρομή",
+        subtitle: next ? `${stop.label || stop.address} → ${next.label || next.address}` : "Επιστροφή",
+        startAt: null,
+        endAt: null,
+        tasks: transitTasks,
+        quotes: transitQuotes,
+      });
+    }
+  }
+
+  return phases;
+}
+
+const PHASE_META: Record<FlowPhase["kind"], { dot: string; bg: string; ring: string; label: string; icon: string }> = {
+  PREP:     { dot: "bg-violet-500",  bg: "bg-violet-50",  ring: "ring-violet-200",  label: "PREP",     icon: "📦" },
+  PICKUP:   { dot: "bg-sky-500",     bg: "bg-sky-50",     ring: "ring-sky-200",     label: "PICKUP",   icon: "📥" },
+  TRANSIT:  { dot: "bg-amber-500",   bg: "bg-amber-50",   ring: "ring-amber-200",   label: "TRANSIT",  icon: "🚚" },
+  DELIVERY: { dot: "bg-rose-500",    bg: "bg-rose-50",    ring: "ring-rose-200",    label: "DELIVERY", icon: "📤" },
+};
+
+function FlowView({ project }: { project: ProjectData }) {
+  const phases = buildFlowPhases(project);
+
+  // Aggregate counts for header strip
+  let totalStops = project.stops.length;
+  let totalServices = 0;
+  let totalTasks = 0;
+  let totalQuotes = 0;
+  for (const s of project.stops) {
+    totalServices += s.services.length;
+    for (const svc of s.services) {
+      totalTasks += svc.tasks.length;
+      totalQuotes += svc.quoteRequests.filter((q) => q.status !== "LOST" && q.status !== "CANCELLED").length;
+    }
+  }
+
+  if (totalStops === 0) {
+    return (
+      <div className="cx-card border-dashed bg-muted/30 px-4 py-8 text-center">
+        <p className="text-[12px] text-muted-foreground">Δεν υπάρχουν στάσεις στο project.</p>
+      </div>
+    );
+  }
+
+  const doneTasks = phases.flatMap((p) => p.tasks).filter((t) => t.status === "DONE").length;
+  const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border bg-card p-4">
-      <svg width={totalW} height={totalH} className="block min-w-full">
-        {/* Edges */}
-        {stopLayouts.map((sl) =>
-          sl.services.map((sv) => (
-            <g key={`edge-${sv.svc.id}`}>
-              <line
-                x1={STOP_W}
-                y1={(sl.yStart + sl.yEnd) / 2}
-                x2={STOP_W + COL_GAP}
-                y2={sv.y + NODE_H / 2}
-                stroke="#cbd5e1"
-                strokeWidth={1.5}
-              />
-              {sv.nodes.map((n, i) => (
-                <line
-                  key={`edge2-${sv.svc.id}-${i}`}
-                  x1={STOP_W + COL_GAP + SVC_W}
-                  y1={sv.y + NODE_H / 2}
-                  x2={STOP_W + COL_GAP + SVC_W + COL_GAP}
-                  y2={n.y + NODE_H / 2}
-                  stroke={n.kind === "quote" ? "#fbbf24" : "#cbd5e1"}
-                  strokeDasharray={n.kind === "quote" ? "4 3" : ""}
-                  strokeWidth={1.5}
-                />
-              ))}
-            </g>
-          )),
-        )}
-        {/* Stop nodes */}
-        {stopLayouts.map((sl, idx) => {
-          const isPickup = sl.stop.type === "PICKUP";
-          const cy = (sl.yStart + sl.yEnd) / 2;
-          return (
-            <g key={`stop-${sl.stop.id}`}>
-              <title>{`${idx + 1}. ${isPickup ? "Παραλαβή" : "Παράδοση"} — ${sl.stop.address}`}</title>
-              <rect
-                x={0}
-                y={cy - NODE_H / 2}
-                width={STOP_W}
-                height={NODE_H}
-                rx={12}
-                fill={isPickup ? "#dbeafe" : "#ffe4e6"}
-                stroke={isPickup ? "#3b82f6" : "#ef4444"}
-                strokeWidth={2}
-              />
-              <foreignObject x={10} y={cy - NODE_H / 2 + 6} width={STOP_W - 20} height={NODE_H - 12}>
-                <div
-                  style={{
-                    fontFamily: "system-ui,-apple-system,sans-serif",
-                    color: isPickup ? "#1e40af" : "#991b1b",
-                    fontSize: 11,
-                    lineHeight: 1.2,
-                    overflow: "hidden",
-                  }}
+    <div className="cx-card overflow-hidden bg-muted/40">
+      {/* Header strip με counts + progress */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-[var(--cx-accent-soft)] px-3 py-2">
+        <span className="cx-eyebrow text-[var(--cx-accent)]">Ροή εκτέλεσης</span>
+        <span className="text-[11px] text-muted-foreground">
+          <strong className="font-semibold tabular-nums text-foreground">{phases.length}</strong> φάσεις
+          <span className="mx-1 text-muted-foreground/40">·</span>
+          <strong className="font-semibold tabular-nums text-foreground">{totalTasks}</strong> εργασίες
+          {totalQuotes > 0 && (
+            <>
+              <span className="mx-1 text-muted-foreground/40">·</span>
+              <strong className="font-semibold tabular-nums text-amber-700">{totalQuotes}</strong> εκκρεμή quotes
+            </>
+          )}
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="h-1 w-24 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-emerald-500 cx-transition" style={{ width: `${progressPct}%` }} />
+          </div>
+          <span className="text-[11px] font-semibold tabular-nums">{progressPct}%</span>
+        </div>
+      </div>
+
+      {/* Horizontal stepper */}
+      <div className="border-b border-border bg-card px-3 py-3">
+        <ol className="flex flex-wrap items-stretch gap-y-2">
+          {phases.map((phase, idx) => {
+            const meta = PHASE_META[phase.kind];
+            const done = phase.tasks.filter((t) => t.status === "DONE").length;
+            const blocked = phase.tasks.filter((t) => t.status === "BLOCKED").length;
+            const inProgress = phase.tasks.filter((t) => t.status === "IN_PROGRESS").length;
+            const phasePct = phase.tasks.length > 0 ? Math.round((done / phase.tasks.length) * 100) : 0;
+            const isDone = phase.tasks.length > 0 && done === phase.tasks.length;
+            return (
+              <li key={phase.id} className="flex items-center">
+                <a
+                  href={`#${phase.id}`}
+                  className={`flex min-w-0 max-w-[180px] items-center gap-2 rounded-md px-2 py-1.5 ring-1 ring-inset cx-transition hover:bg-[var(--cx-hover)] ${meta.bg} ${meta.ring}`}
                 >
-                  <div style={{ fontWeight: 700, fontSize: 11 }}>
-                    {idx + 1}. {isPickup ? "Παραλαβή" : "Παράδοση"}
+                  <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white ${meta.dot}`}>
+                    {isDone ? "✓" : idx + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-foreground/80">
+                      {meta.label}
+                      {blocked > 0 && <span aria-hidden className="cx-dot bg-rose-500" />}
+                      {inProgress > 0 && <span aria-hidden className="cx-dot bg-amber-500" />}
+                    </div>
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {phase.subtitle || `${phase.tasks.length} εργ.`}
+                      {phase.tasks.length > 0 && (
+                        <span className="ml-1 tabular-nums text-foreground/70">· {done}/{phase.tasks.length}</span>
+                      )}
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "#475569",
-                      marginTop: 2,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {sl.stop.address}
-                  </div>
+                </a>
+                {idx < phases.length - 1 && (
+                  <span aria-hidden className="px-1 text-base text-muted-foreground/50 select-none">→</span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+
+      {/* Expanded phase panels — ένα κάτω από το άλλο σε χρονολογική σειρά */}
+      <div className="divide-y divide-border">
+        {phases.map((phase, idx) => {
+          const meta = PHASE_META[phase.kind];
+          const done = phase.tasks.filter((t) => t.status === "DONE").length;
+          const totalTimeMin = phase.tasks.reduce((s, t) => s + t.durationMinutes, 0);
+          return (
+            <section
+              key={phase.id}
+              id={phase.id}
+              className="scroll-mt-4"
+            >
+              {/* Phase header */}
+              <header className={`flex items-center gap-3 px-3 py-2 ${meta.bg}`}>
+                <span className={`grid size-8 shrink-0 place-items-center rounded-md text-[13px] font-semibold text-white ${meta.dot}`}>
+                  {idx + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="cx-eyebrow text-foreground/80">{meta.label}</span>
+                    <span className="text-[13px] font-semibold text-foreground">{phase.title}</span>
+                    {phase.subtitle && (
+                      <>
+                        <span className="text-muted-foreground/40">·</span>
+                        <span className="truncate text-[12px] text-muted-foreground">{phase.subtitle}</span>
+                      </>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    <strong className="tabular-nums text-foreground/80">{phase.tasks.length}</strong> εργασίες ·{" "}
+                    <strong className="tabular-nums text-foreground/80">{Math.floor(totalTimeMin / 60)}h{totalTimeMin % 60 ? ` ${totalTimeMin % 60}′` : ""}</strong>
+                    {phase.tasks.length > 0 && (
+                      <>
+                        <span className="mx-1 text-muted-foreground/40">·</span>
+                        <strong className="tabular-nums text-emerald-700">{done}/{phase.tasks.length} done</strong>
+                      </>
+                    )}
+                  </p>
                 </div>
-              </foreignObject>
-            </g>
+                {phase.startAt && (
+                  <span className="shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                    {phase.startAt.toLocaleString("el-GR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+              </header>
+
+              {/* Task + quote list */}
+              <div className="bg-card px-3 py-2">
+                {phase.tasks.length === 0 && phase.quotes.length === 0 ? (
+                  <p className="py-2 text-[11px] italic text-muted-foreground">— καμία ενέργεια —</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {phase.tasks.map((t) => {
+                      const status = FLOW_TASK_STATUS[t.status] ?? FLOW_TASK_STATUS.EMPTY;
+                      const svc = SERVICE_META[t.serviceType];
+                      const SvcIcon = svc.icon;
+                      return (
+                        <li
+                          key={t.id}
+                          className={`relative flex items-center gap-2.5 overflow-hidden rounded-md border border-border pl-3 pr-2.5 py-1.5 ${status.tint}`}
+                        >
+                          <span aria-hidden className={`absolute left-0 top-0 h-full w-0.5 ${status.rail}`} />
+                          <SvcIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] font-semibold text-foreground">{t.title}</p>
+                            <p className="truncate text-[10px] text-muted-foreground">
+                              {t.assigneeName ? (
+                                <>
+                                  {t.assigneeKind === "PARTNER" ? "🤝 " : "👤 "}
+                                  {t.assigneeName}
+                                </>
+                              ) : (
+                                <span className="font-semibold text-rose-700">χωρίς ανάθεση</span>
+                              )}
+                              <span className="mx-1 text-muted-foreground/40">·</span>
+                              <span className="tabular-nums">{t.durationMinutes}′</span>
+                            </p>
+                          </div>
+                          <span className={`shrink-0 inline-flex items-center gap-1 rounded-full bg-card px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ring-1 ring-inset ring-border`}>
+                            <span aria-hidden className={`cx-dot ${status.dot}`} />
+                            {status.label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                    {phase.quotes.map((q) => {
+                      const status = FLOW_QUOTE_STATUS[q.status] ?? FLOW_QUOTE_STATUS.PENDING;
+                      const svc = SERVICE_META[q.serviceType];
+                      const SvcIcon = svc.icon;
+                      return (
+                        <li
+                          key={q.id}
+                          className={`relative flex items-center gap-2.5 overflow-hidden rounded-md border border-dashed border-border pl-3 pr-2.5 py-1.5 ${status.tint}`}
+                        >
+                          <span aria-hidden className={`absolute left-0 top-0 h-full w-0.5 ${status.rail}`} />
+                          <SvcIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] font-semibold text-foreground">
+                              💬 {q.label}
+                            </p>
+                            <p className="truncate text-[10px] text-muted-foreground">
+                              {q.price != null ? `Προσφορά ${q.price.toLocaleString("el-GR")}€` : "quote request"}
+                            </p>
+                          </div>
+                          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-card px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ring-1 ring-inset ring-border">
+                            <span aria-hidden className={`cx-dot ${status.dot}`} />
+                            {status.label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </section>
           );
         })}
-        {/* Service nodes */}
-        {stopLayouts.map((sl) =>
-          sl.services.map((sv) => {
-            const meta = SERVICE_META[sv.svc.serviceType];
-            const colors = svcSvgColors(sv.svc.serviceType);
-            const tipParts = [
-              meta.label,
-              `Ποσότητα: ${sv.svc.quantity}`,
-              sv.svc.totalPriceCents != null
-                ? `Σύνολο: ${(sv.svc.totalPriceCents / 100).toLocaleString("el-GR")}€`
-                : "Καμία τιμή",
-              sv.svc.partner ? `Συνεργάτης: ${sv.svc.partner.name}` : null,
-              sv.svc.label ? `Σημείωση: ${sv.svc.label}` : null,
-            ].filter(Boolean);
-            return (
-              <g key={`svc-${sv.svc.id}`}>
-                <title>{tipParts.join("\n")}</title>
-                <rect
-                  x={STOP_W + COL_GAP}
-                  y={sv.y}
-                  width={SVC_W}
-                  height={NODE_H}
-                  rx={10}
-                  fill={colors.fill}
-                  stroke={colors.stroke}
-                  strokeWidth={1.5}
-                />
-                <foreignObject x={STOP_W + COL_GAP + 10} y={sv.y + 6} width={SVC_W - 20} height={NODE_H - 12}>
-                  <div
-                    style={{
-                      fontFamily: "system-ui,-apple-system,sans-serif",
-                      lineHeight: 1.2,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 12,
-                        color: colors.text,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {meta.label}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "#475569",
-                        marginTop: 2,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      ×{sv.svc.quantity}
-                      {sv.svc.totalPriceCents != null && ` · ${(sv.svc.totalPriceCents / 100).toLocaleString("el-GR")}€`}
-                      {sv.svc.partner && ` · 🤝 ${sv.svc.partner.name}`}
-                    </div>
-                  </div>
-                </foreignObject>
-              </g>
-            );
-          }),
-        )}
-        {/* Task / quote nodes */}
-        {stopLayouts.map((sl) =>
-          sl.services.flatMap((sv) =>
-            sv.nodes.map((n, i) => {
-              const colors = flowNodeColors(n.status, n.kind);
-              return (
-                <g key={`node-${sv.svc.id}-${i}`}>
-                  <title>{`${n.label}${n.meta ? ` — ${n.meta}` : ""}\nStatus: ${n.status}`}</title>
-                  <rect
-                    x={STOP_W + COL_GAP + SVC_W + COL_GAP}
-                    y={n.y}
-                    width={TASK_W}
-                    height={NODE_H}
-                    rx={8}
-                    fill={colors.fill}
-                    stroke={colors.stroke}
-                    strokeWidth={1.5}
-                  />
-                  <foreignObject
-                    x={STOP_W + COL_GAP + SVC_W + COL_GAP + 8}
-                    y={n.y + 6}
-                    width={TASK_W - 16}
-                    height={NODE_H - 12}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "system-ui,-apple-system,sans-serif",
-                        lineHeight: 1.2,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: 11,
-                          color: colors.text,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {n.kind === "quote" ? "💬 " : ""}
-                        {n.label}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          color: "#475569",
-                          marginTop: 2,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {n.meta}
-                      </div>
-                    </div>
-                  </foreignObject>
-                </g>
-              );
-            }),
-          ),
-        )}
-      </svg>
-      <p className="mt-3 text-[10px] text-muted-foreground">
-        💡 Συνεχόμενες γραμμές = αναθέσεις (tasks) · Διακεκομμένες = εκκρεμή quotes σε partners
-      </p>
+      </div>
     </div>
   );
 }
@@ -1193,20 +1288,20 @@ function flowNodeColors(status: string, kind: "task" | "quote"): { fill: string;
 
 const HISTORY_META: Record<
   import("@/lib/project-history").HistoryEvent["kind"],
-  { tone: string; icon: typeof Clock }
+  { iconBg: string; iconText: string; rowTint: string; icon: typeof Clock }
 > = {
-  PROJECT_CREATED:       { tone: "bg-indigo-100 text-indigo-800 ring-indigo-200",   icon: Sparkles },
-  TASK_CREATED:          { tone: "bg-sky-100 text-sky-800 ring-sky-200",            icon: Plus },
-  TASK_CONFIRMED:        { tone: "bg-emerald-100 text-emerald-800 ring-emerald-200", icon: CheckCircle2 },
-  TASK_DECLINED:         { tone: "bg-rose-100 text-rose-800 ring-rose-200",          icon: XCircle },
-  TASK_STARTED:          { tone: "bg-amber-100 text-amber-800 ring-amber-200",       icon: Clock },
-  TASK_COMPLETED:        { tone: "bg-emerald-100 text-emerald-900 ring-emerald-200", icon: CheckCircle2 },
-  REMINDER_SENT:         { tone: "bg-amber-50 text-amber-700 ring-amber-200",        icon: Bell },
-  QUOTE_REQUEST_SENT:    { tone: "bg-violet-100 text-violet-800 ring-violet-200",    icon: Send },
-  QUOTE_RECEIVED:        { tone: "bg-emerald-100 text-emerald-800 ring-emerald-200", icon: Handshake },
-  QUOTE_ACCEPTED:        { tone: "bg-indigo-100 text-indigo-800 ring-indigo-200",    icon: CheckCircle2 },
-  QUOTE_LOST:            { tone: "bg-zinc-100 text-zinc-600 ring-zinc-200",          icon: XCircle },
-  AVAILABILITY_OVERRIDE: { tone: "bg-rose-100 text-rose-800 ring-rose-200",          icon: CircleAlert },
+  PROJECT_CREATED:       { iconBg: "bg-indigo-500",  iconText: "text-white", rowTint: "bg-indigo-50/40",   icon: Sparkles },
+  TASK_CREATED:          { iconBg: "bg-sky-500",     iconText: "text-white", rowTint: "bg-sky-50/40",      icon: Plus },
+  TASK_CONFIRMED:        { iconBg: "bg-emerald-500", iconText: "text-white", rowTint: "bg-emerald-50/40",  icon: CheckCircle2 },
+  TASK_DECLINED:         { iconBg: "bg-rose-500",    iconText: "text-white", rowTint: "bg-rose-50/40",     icon: XCircle },
+  TASK_STARTED:          { iconBg: "bg-amber-500",   iconText: "text-white", rowTint: "bg-amber-50/40",    icon: Clock },
+  TASK_COMPLETED:        { iconBg: "bg-emerald-600", iconText: "text-white", rowTint: "bg-emerald-50/50",  icon: CheckCircle2 },
+  REMINDER_SENT:         { iconBg: "bg-amber-400",   iconText: "text-amber-900", rowTint: "bg-amber-50/30", icon: Bell },
+  QUOTE_REQUEST_SENT:    { iconBg: "bg-violet-500",  iconText: "text-white", rowTint: "bg-violet-50/40",   icon: Send },
+  QUOTE_RECEIVED:        { iconBg: "bg-emerald-500", iconText: "text-white", rowTint: "bg-emerald-50/40",  icon: Handshake },
+  QUOTE_ACCEPTED:        { iconBg: "bg-indigo-600",  iconText: "text-white", rowTint: "bg-indigo-50/50",   icon: CheckCircle2 },
+  QUOTE_LOST:            { iconBg: "bg-zinc-400",    iconText: "text-white", rowTint: "bg-zinc-50/40",     icon: XCircle },
+  AVAILABILITY_OVERRIDE: { iconBg: "bg-rose-600",    iconText: "text-white", rowTint: "bg-rose-50/40",     icon: CircleAlert },
 };
 
 function HistoryTimeline({
@@ -1241,24 +1336,19 @@ function HistoryTimeline({
 
   if (events.length === 0) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-12 text-center">
-        <Clock className="mx-auto size-10 text-muted-foreground" />
-        <p className="mt-3 text-sm text-muted-foreground">
-          Καμία δραστηριότητα ακόμη
-        </p>
+      <div className="cx-card border-dashed bg-muted/30 px-4 py-8 text-center">
+        <p className="text-[12px] text-muted-foreground">Καμία δραστηριότητα ακόμη.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Filter chips */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
-        <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-          Φίλτρο
-        </span>
+      <div className="cx-card flex flex-wrap items-center gap-1.5 px-2.5 py-1.5">
+        <span className="cx-eyebrow">Φίλτρο</span>
         {([
-          { id: "all", label: `Όλα (${events.length})` },
+          { id: "all", label: `Όλα · ${events.length}` },
           { id: "tasks", label: "Εργασίες" },
           { id: "quotes", label: "Quotes" },
           { id: "alerts", label: "Alerts" },
@@ -1267,66 +1357,65 @@ function HistoryTimeline({
             key={f.id}
             type="button"
             onClick={() => setFilter(f.id)}
-            className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-semibold transition ${
+            className={`inline-flex h-6 items-center rounded px-2 text-[11px] font-semibold cx-transition ${
               filter === f.id
-                ? "bg-[var(--color-brand-blue)] text-white shadow-sm"
-                : "text-muted-foreground hover:bg-secondary"
+                ? "bg-[var(--cx-accent)] text-primary-foreground"
+                : "text-muted-foreground hover:bg-[var(--cx-hover)] hover:text-foreground"
             }`}
           >
             {f.label}
           </button>
         ))}
-        <span className="ml-auto text-[10px] text-muted-foreground">
+        <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
           {filtered.length} {filtered.length === 1 ? "γεγονός" : "γεγονότα"}
         </span>
       </div>
 
-      {/* Timeline */}
-      <div className="space-y-6">
-        {groups.map(([day, items]) => (
-          <section key={day}>
-            <div className="mb-2 flex items-center gap-3">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {day}
-              </h3>
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-[10px] text-muted-foreground">
-                {items.length} {items.length === 1 ? "γεγονός" : "γεγονότα"}
-              </span>
-            </div>
-            <ol className="relative ml-3 space-y-2 border-l-2 border-border pl-5">
-              {items.map((e) => {
-                const meta = HISTORY_META[e.kind];
-                const Icon = meta.icon;
-                const time = new Date(e.at).toLocaleTimeString("el-GR", {
-                  hour: "2-digit", minute: "2-digit",
-                });
-                return (
-                  <li key={e.id} className="relative">
-                    <span className={`absolute -left-[27px] top-2 grid size-5 place-items-center rounded-full ring-4 ring-card ${meta.tone.split(" ").filter((c) => c.startsWith("bg-")).join(" ")}`}>
-                      <Icon className="size-3" />
-                    </span>
-                    <div className={`group flex items-start gap-3 rounded-lg border bg-white p-3 ring-1 transition hover:shadow-sm ${meta.tone}`}>
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-baseline gap-2">
-                          <span className="font-mono text-xs font-bold tabular-nums text-muted-foreground">
-                            {time}
-                          </span>
-                          <span className="text-sm font-semibold">{e.title}</span>
+      {/* Timeline — σε tinted container, όχι σε καθαρό λευκό */}
+      <div className="cx-card bg-muted/40 p-3">
+        <div className="space-y-4">
+          {groups.map(([day, items]) => (
+            <section key={day}>
+              <div className="mb-1.5 flex items-center gap-2">
+                <h3 className="cx-eyebrow">{day}</h3>
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {items.length}
+                </span>
+              </div>
+              <ol className="relative ml-3 space-y-1.5 border-l border-border pl-5">
+                {items.map((e) => {
+                  const meta = HISTORY_META[e.kind];
+                  const Icon = meta.icon;
+                  const time = new Date(e.at).toLocaleTimeString("el-GR", {
+                    hour: "2-digit", minute: "2-digit",
+                  });
+                  return (
+                    <li key={e.id} className="relative">
+                      <span
+                        aria-hidden
+                        className={`absolute -left-[27px] top-1.5 grid size-6 place-items-center rounded-full ring-4 ring-muted/40 ${meta.iconBg} ${meta.iconText}`}
+                      >
+                        <Icon className="size-3" />
+                      </span>
+                      <div className={`flex items-start gap-3 rounded-md border border-border px-2.5 py-2 cx-transition hover:brightness-95 ${meta.rowTint}`}>
+                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                          {time}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-semibold text-foreground">{e.title}</p>
+                          {e.detail && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{e.detail}</p>
+                          )}
                         </div>
-                        {e.detail && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {e.detail}
-                          </p>
-                        )}
                       </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        ))}
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1344,18 +1433,18 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+      className={`relative inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[13px] font-medium cx-transition ${
         active
-          ? "border-[var(--color-brand-blue)] text-foreground"
+          ? "border-[var(--cx-accent)] text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground"
       }`}
     >
-      <Icon className="size-4" />
+      <Icon className="size-3.5" />
       {label}
       {count !== undefined && (
-        <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-          active ? "bg-[var(--color-brand-blue)] text-white" : "bg-secondary text-muted-foreground"
-        }`}>{count}</span>
+        <span className="rounded-full px-1 text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-inset ring-border/70">
+          {count}
+        </span>
       )}
     </button>
   );
@@ -1368,17 +1457,29 @@ function ProgressPill({ tasks }: { tasks: Array<{ status: TaskStatus }> }) {
   const total = tasks.length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-3 text-xs">
-        <span className="font-bold text-foreground">{done}/{total} ολοκληρώθηκαν</span>
-        {inProgress > 0 && <span className="text-amber-700">⏱ {inProgress} σε εξέλιξη</span>}
-        {blocked > 0 && <span className="text-rose-700">⚠ {blocked} μπλοκ.</span>}
-      </div>
-      <div className="h-1.5 w-48 overflow-hidden rounded-full bg-secondary">
-        <div
-          className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all"
-          style={{ width: `${pct}%` }}
-        />
+    <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="font-semibold tabular-nums text-foreground">{done}/{total} ολοκληρώθηκαν</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="tabular-nums font-semibold text-foreground">{pct}%</span>
+          {inProgress > 0 && (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <span aria-hidden className="cx-dot bg-amber-500" /> {inProgress} σε εξέλιξη
+            </span>
+          )}
+          {blocked > 0 && (
+            <span className="inline-flex items-center gap-1 text-rose-700">
+              <span aria-hidden className="cx-dot bg-rose-500" /> {blocked} μπλοκ.
+            </span>
+          )}
+        </div>
+        <div className="h-1 w-48 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-emerald-500 cx-transition"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1475,34 +1576,27 @@ function StopBlock({
   };
 
   return (
-    <div className={`overflow-hidden rounded-2xl border-2 bg-card transition ${
-      open
-        ? isPickup ? "border-blue-200 shadow-sm" : "border-rose-200 shadow-sm"
-        : "border-border"
+    <div className={`cx-card overflow-hidden ${
+      open ? (isPickup ? "ring-1 ring-sky-200" : "ring-1 ring-rose-200") : ""
     }`}>
-      {/* Stop header — colored gradient strip */}
+      {/* Stop header — minimal accent strip */}
       <button
         type="button"
         onClick={onToggle}
-        className={`flex w-full items-center justify-between gap-3 p-4 text-left transition ${
-          isPickup
-            ? "bg-gradient-to-r from-blue-50 via-white to-white hover:from-blue-100"
-            : "bg-gradient-to-r from-rose-50 via-white to-white hover:from-rose-100"
+        className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left cx-transition hover:bg-[var(--cx-hover)] ${
+          isPickup ? "bg-sky-50/40" : "bg-rose-50/40"
         }`}
       >
-        <div className="flex flex-1 items-center gap-4">
+        <div className="flex flex-1 items-center gap-3">
           {open ? (
-            <ChevronDown className="size-5 text-muted-foreground" />
+            <ChevronDown className="size-4 text-muted-foreground" />
           ) : (
-            <ChevronRight className="size-5 text-muted-foreground" />
+            <ChevronRight className="size-4 text-muted-foreground" />
           )}
-          <div className={`relative grid size-12 place-items-center rounded-xl text-base font-bold text-white shadow-lg ${
-            isPickup ? "bg-gradient-to-br from-blue-500 to-blue-700" : "bg-gradient-to-br from-rose-500 to-rose-700"
+          <div className={`relative grid size-8 place-items-center rounded-md text-[12px] font-semibold text-white ${
+            isPickup ? "bg-sky-600" : "bg-rose-600"
           }`}>
             {stopIndex + 1}
-            <div className="absolute -bottom-1 -right-1 rounded-md bg-white px-1 py-0.5 text-[8px] font-bold uppercase shadow-sm">
-              {isPickup ? "PU" : "DR"}
-            </div>
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
@@ -1591,7 +1685,7 @@ function StopBlock({
             <button
               type="button"
               onClick={() => setAddingService(true)}
-              className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border bg-white text-sm font-semibold text-muted-foreground transition hover:border-[var(--color-brand-blue)] hover:bg-blue-50 hover:text-[var(--color-brand-blue)]"
+              className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-white text-sm font-semibold text-muted-foreground transition hover:border-[var(--color-brand-blue)] hover:bg-blue-50 hover:text-[var(--color-brand-blue)]"
             >
               <Plus className="size-4" /> Προσθήκη υπηρεσίας
             </button>
@@ -2030,7 +2124,7 @@ function KanbanView({
                 setDragOver(null);
                 if (taskId) moveTask(taskId, status);
               }}
-              className={`flex min-h-[320px] flex-col rounded-2xl border-2 bg-card transition ${
+              className={`flex min-h-[320px] flex-col rounded-md border bg-card transition ${
                 isDragTarget
                   ? "border-[var(--color-brand-blue)] bg-blue-50/50 shadow-md"
                   : "border-border"
@@ -2121,7 +2215,7 @@ function KanbanCard({
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/plain", task.id)}
       onClick={onEdit}
-      className={`group cursor-grab rounded-xl border-2 p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--color-brand-blue)] hover:shadow-md active:cursor-grabbing ${cardBg}`}
+      className={`group cursor-grab rounded-xl border p-2.5 cx-transition  hover:border-[var(--color-brand-blue)] hover:bg-[var(--cx-hover)] active:cursor-grabbing ${cardBg}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${meta.tone}`}>
@@ -2207,7 +2301,7 @@ function ReminderDialog({
       className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl">
+      <div className="w-full max-w-md rounded-md border border-border bg-card p-5 shadow-xl">
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-2">
             <div className="grid size-9 place-items-center rounded-xl bg-amber-100 text-amber-700">
@@ -2393,7 +2487,7 @@ function TaskAssignDialog({
       className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-xl">
+      <div className="w-full max-w-lg rounded-md border border-border bg-card p-5 shadow-xl">
         <h3 className="text-base font-bold">
           {existing ? "Επεξεργασία ανάθεσης" : `Νέα ανάθεση${serviceLabel ? ` · ${serviceLabel}` : ""}`}
         </h3>
@@ -2401,24 +2495,24 @@ function TaskAssignDialog({
         <div className="mt-3 space-y-3">
           <Field label="Τίτλος">
             <input value={title} onChange={(e) => setTitle(e.target.value)}
-              className="h-9 w-full rounded-lg border-2 border-border bg-white px-3 text-sm" />
+              className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm" />
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Έναρξη">
               <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)}
-                className="h-9 w-full rounded-lg border-2 border-border bg-white px-3 text-sm" />
+                className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm" />
             </Field>
             <Field label="Διάρκεια (ώρες)">
               <input type="number" step="0.5" min={0.25} value={hours} onChange={(e) => setHours(e.target.value)}
-                className="h-9 w-full rounded-lg border-2 border-border bg-white px-3 text-sm" />
+                className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm" />
             </Field>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
             {(["EMPLOYEE", "PARTNER", "UNASSIGNED"] as const).map((k) => (
               <button key={k} type="button" onClick={() => setAssigneeKind(k)}
-                className={`h-9 rounded-lg border-2 text-xs font-semibold ${
+                className={`h-9 rounded-lg border text-xs font-semibold ${
                   assigneeKind === k
                     ? "border-[var(--color-brand-blue)] bg-[var(--color-brand-blue)] text-white"
                     : "border-border bg-white"
@@ -2431,7 +2525,7 @@ function TaskAssignDialog({
           {assigneeKind === "EMPLOYEE" && (
             <Field label="Υπάλληλος">
               <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
-                className="h-9 w-full rounded-lg border-2 border-border bg-white px-3 text-sm">
+                className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm">
                 <option value="">— Επέλεξε —</option>
                 {employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.role})</option>)}
               </select>
@@ -2440,7 +2534,7 @@ function TaskAssignDialog({
           {assigneeKind === "PARTNER" && (
             <Field label="Συνεργάτης">
               <select value={partnerId} onChange={(e) => setPartnerId(e.target.value)}
-                className="h-9 w-full rounded-lg border-2 border-border bg-white px-3 text-sm">
+                className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm">
                 <option value="">— Επέλεξε —</option>
                 {partners.length === 0 ? (
                   <option disabled>(Δεν υπάρχουν συνεργάτες — πρόσθεσε από /carrier/partners)</option>
@@ -2451,7 +2545,7 @@ function TaskAssignDialog({
 
           <Field label="Όχημα (προαιρετικό)">
             <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}
-              className="h-9 w-full rounded-lg border-2 border-border bg-white px-3 text-sm">
+              className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm">
               <option value="">— Χωρίς —</option>
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -2463,14 +2557,14 @@ function TaskAssignDialog({
 
           {/* Co-assignees: π.χ. οδηγός + βοηθός μαζί */}
           <Field label={`👥 Συμμετέχοντες (extra) ${coEmployeeIds.size + coPartnerIds.size > 0 ? `· ${coEmployeeIds.size + coPartnerIds.size}` : ""}`}>
-            <details className="rounded-lg border-2 border-border bg-white">
+            <details className="rounded-lg border border-border bg-white">
               <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-muted-foreground">
                 {coEmployeeIds.size + coPartnerIds.size === 0
                   ? "— Κανείς extra —"
                   : `${coEmployeeIds.size + coPartnerIds.size} επιπλέον επιλεγμέν${coEmployeeIds.size + coPartnerIds.size === 1 ? "ος" : "οι"}`}
               </summary>
               <div className="border-t border-border p-2">
-                <p className="px-1 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                <p className="px-1 py-1 cx-eyebrow">
                   Υπάλληλοι
                 </p>
                 {employees.filter((e) => e.id !== employeeId).length === 0 ? (
@@ -2501,7 +2595,7 @@ function TaskAssignDialog({
                       ))}
                   </ul>
                 )}
-                <p className="mt-2 px-1 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                <p className="mt-2 px-1 py-1 cx-eyebrow">
                   Συνεργάτες
                 </p>
                 {partners.filter((p) => p.id !== partnerId).length === 0 ? (
@@ -2538,7 +2632,7 @@ function TaskAssignDialog({
 
           {availableBlockers.length > 0 && (
             <Field label={`🔗 Εξαρτάται από (${blockerIds.size})`}>
-              <details className="rounded-lg border-2 border-border bg-white">
+              <details className="rounded-lg border border-border bg-white">
                 <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-muted-foreground">
                   {blockerIds.size === 0
                     ? "— Καμία εξάρτηση —"
@@ -2578,7 +2672,7 @@ function TaskAssignDialog({
         {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</p>}
 
         {conflicts.length > 0 && (
-          <div className="mt-3 rounded-lg border-2 border-amber-300 bg-amber-50 p-3">
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
             <p className="text-sm font-bold text-amber-900">⚠ Σύγκρουση διαθεσιμότητας</p>
             <ul className="mt-2 space-y-1.5">
               {conflicts.map((c) => {
@@ -2869,7 +2963,7 @@ function RequestPartnersDialog({
       className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-5 shadow-xl">
+      <div className="w-full max-w-2xl rounded-md border border-border bg-card p-5 shadow-xl">
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-2">
             <div className="grid size-9 place-items-center rounded-xl bg-amber-100 text-amber-700">
@@ -2888,16 +2982,16 @@ function RequestPartnersDialog({
         <div className="grid grid-cols-3 gap-3">
           <Field label="Έναρξη εργασίας">
             <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)}
-              className="h-9 w-full rounded-lg border-2 border-border bg-white px-2 text-sm" />
+              className="h-9 w-full rounded-lg border border-border bg-white px-2 text-sm" />
           </Field>
           <Field label="Εκτιμώμενη διάρκεια (h)">
             <input type="number" step="0.5" min={0.25} value={hours} onChange={(e) => setHours(e.target.value)}
-              className="h-9 w-full rounded-lg border-2 border-border bg-white px-2 text-sm" />
+              className="h-9 w-full rounded-lg border border-border bg-white px-2 text-sm" />
           </Field>
           <Field label="Ισχύς (ώρες)">
             <input type="number" min={1} max={720} value={validHours}
               onChange={(e) => setValidHours(parseInt(e.target.value) || 72)}
-              className="h-9 w-full rounded-lg border-2 border-border bg-white px-2 text-sm" />
+              className="h-9 w-full rounded-lg border border-border bg-white px-2 text-sm" />
           </Field>
         </div>
 
@@ -2905,14 +2999,14 @@ function RequestPartnersDialog({
           <Field label="Σημειώσεις (προαιρετικό)">
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="π.χ. προτιμητέοι όροι, ειδικές απαιτήσεις"
-              className="w-full rounded-lg border-2 border-border bg-white p-2 text-sm" />
+              className="w-full rounded-lg border border-border bg-white p-2 text-sm" />
           </Field>
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="cx-eyebrow">
                 👤 Συνεργάτες ({selectedPartners.size})
               </span>
             </div>
@@ -2924,7 +3018,7 @@ function RequestPartnersDialog({
               <ul className="grid max-h-56 gap-1.5 overflow-y-auto rounded-lg border border-border bg-slate-50/30 p-2">
                 {availablePartners.map((p) => (
                   <li key={p.id}>
-                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border-2 bg-white px-2.5 py-1.5 text-xs transition ${
+                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-xs transition ${
                       selectedPartners.has(p.id)
                         ? "border-amber-500 bg-amber-50 shadow-sm"
                         : "border-transparent hover:border-border"
@@ -2946,7 +3040,7 @@ function RequestPartnersDialog({
 
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="cx-eyebrow">
                 🏢 Εταιρίες ({selectedCompanies.size})
               </span>
             </div>
@@ -2959,7 +3053,7 @@ function RequestPartnersDialog({
                 {availableCompanies.map((c) => (
                   <li key={c.id}>
                     <label
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border-2 bg-white px-2.5 py-1.5 text-xs transition ${
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-xs transition ${
                         !c.hasEmail
                           ? "border-rose-200 opacity-60"
                           : selectedCompanies.has(c.id)

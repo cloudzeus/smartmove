@@ -1,0 +1,6 @@
+BEGIN;
+ALTER TABLE "Branch"
+  ADD COLUMN "offersToOthers"  BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN "offeredServices" TEXT,
+  ADD COLUMN "offeringsNotes"  TEXT;
+COMMIT;

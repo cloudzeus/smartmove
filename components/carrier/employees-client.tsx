@@ -54,9 +54,23 @@ interface Employee {
   idNumber: string | null;
   notes: string | null;
   active: boolean;
+  branchId: string | null;
+  branchName: string | null;
 }
 
-export function EmployeesClient({ employees }: { employees: Employee[] }) {
+export interface BranchOption {
+  id: string;
+  name: string;
+  serviceRadiusKm: number;
+  hasCoords: boolean;
+}
+
+export function EmployeesClient({
+  employees, branches,
+}: {
+  employees: Employee[];
+  branches: BranchOption[];
+}) {
   const [editing, setEditing] = useState<Employee | "new" | null>(null);
 
   return (
@@ -108,6 +122,7 @@ export function EmployeesClient({ employees }: { employees: Employee[] }) {
       {editing && (
         <EmployeeDialog
           employee={editing === "new" ? null : editing}
+          branches={branches}
           onClose={() => setEditing(null)}
         />
       )}
@@ -156,6 +171,11 @@ function EmployeeCard({
                 Ανενεργός
               </span>
             )}
+            {employee.branchName && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-800 ring-1 ring-inset ring-sky-200">
+                📍 {employee.branchName}
+              </span>
+            )}
           </div>
         </div>
         <button
@@ -202,10 +222,10 @@ function EmployeeCard({
 }
 
 function EmployeeDialog({
-  employee,
-  onClose,
+  employee, branches, onClose,
 }: {
   employee: Employee | null;
+  branches: BranchOption[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -219,6 +239,7 @@ function EmployeeDialog({
     idNumber: employee?.idNumber ?? "",
     notes: employee?.notes ?? "",
     active: employee?.active ?? true,
+    branchId: employee?.branchId ?? "",
   });
 
   const submit = (e: React.FormEvent) => {
@@ -295,6 +316,40 @@ function EmployeeDialog({
                 </option>
               ))}
             </select>
+          </Field>
+          <Field
+            label="Υποκατάστημα"
+            className="sm:col-span-2"
+            hint={
+              branches.length === 0
+                ? "Δεν έχεις δηλώσει υποκαταστήματα. Δημιούργησε ένα στο /carrier/branches για να ορίσεις περιοχή εξυπηρέτησης."
+                : "Καθορίζει την περιοχή εξυπηρέτησης (κληρονομείται από το υποκατάστημα)."
+            }
+          >
+            {branches.length === 0 ? (
+              <div className="flex h-10 items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 text-[12px] text-muted-foreground">
+                <span>— Δεν υπάρχουν υποκαταστήματα —</span>
+                <a
+                  href="/carrier/branches"
+                  className="text-[11px] font-semibold text-[var(--cx-accent)] hover:underline"
+                >
+                  Δημιουργία →
+                </a>
+              </div>
+            ) : (
+              <select
+                value={form.branchId}
+                onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-[var(--color-brand-blue)]"
+              >
+                <option value="">— Χωρίς (εξυπηρετεί παντού) —</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}{b.hasCoords ? ` · ${b.serviceRadiusKm}km` : " (χωρίς συντεταγμένες)"}
+                  </option>
+                ))}
+              </select>
+            )}
           </Field>
           <Field label="Κατάσταση">
             <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm">
@@ -391,13 +446,16 @@ function Field({
   label,
   children,
   className,
+  hint,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
+  hint?: string;
 }) {
   return (
     <label className={cn("flex flex-col gap-1", className)}>
+      {hint && <span className="order-3 text-[10px] text-muted-foreground">{hint}</span>}
       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </span>

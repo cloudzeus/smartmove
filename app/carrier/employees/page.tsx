@@ -32,10 +32,18 @@ export default async function CarrierEmployeesPage() {
     );
   }
 
-  const employees = await db.carrierEmployee.findMany({
-    where: { tenantId: membership.tenantId, deletedAt: null },
-    orderBy: [{ active: "desc" }, { name: "asc" }],
-  });
+  const [employees, branches] = await Promise.all([
+    db.carrierEmployee.findMany({
+      where: { tenantId: membership.tenantId, deletedAt: null },
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+      include: { branch: { select: { id: true, commercialName: true, legalName: true } } },
+    }),
+    db.branch.findMany({
+      where: { tenantId: membership.tenantId, deletedAt: null },
+      orderBy: [{ isPrimary: "desc" }, { commercialName: "asc" }],
+      select: { id: true, commercialName: true, legalName: true, serviceRadiusKm: true, lat: true, lng: true },
+    }),
+  ]);
 
   const counts = {
     total: employees.length,
@@ -65,7 +73,26 @@ export default async function CarrierEmployeesPage() {
         ]}
       />
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <EmployeesClient employees={employees} />
+        <EmployeesClient
+          employees={employees.map((e) => ({
+            id: e.id,
+            name: e.name,
+            role: e.role,
+            phone: e.phone,
+            email: e.email,
+            idNumber: e.idNumber,
+            notes: e.notes,
+            active: e.active,
+            branchId: e.branchId,
+            branchName: e.branch ? (e.branch.commercialName ?? e.branch.legalName) : null,
+          }))}
+          branches={branches.map((b) => ({
+            id: b.id,
+            name: b.commercialName ?? b.legalName,
+            serviceRadiusKm: b.serviceRadiusKm,
+            hasCoords: b.lat != null && b.lng != null,
+          }))}
+        />
       </div>
     </>
   );

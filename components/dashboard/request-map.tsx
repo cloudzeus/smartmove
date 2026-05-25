@@ -90,13 +90,42 @@ export function RequestMap({ apiKey, stops }: Props) {
       return;
 
     maptiler.config.apiKey = apiKey;
-    const map = new maptiler.Map({
-      container: containerRef.current,
-      style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${apiKey}`,
-      center: [validStops[0].lng, validStops[0].lat],
-      zoom: 12,
-    });
-    mapRef.current = map;
+
+    // MapLibre 5 (bundled with @maptiler/sdk 4) requires style.projection to
+    // be set. MapTiler-hosted styles may not include it, which leads to
+    // `can't access property "name", this.style.projection is undefined`.
+    // Pre-fetch the style and inject a mercator projection if missing.
+    let cancelled = false;
+    (async () => {
+      const url = `https://api.maptiler.com/maps/streets-v2/style.json?key=${apiKey}`;
+      let styleSpec: unknown;
+      try {
+        const res = await fetch(url);
+        styleSpec = await res.json();
+      } catch {
+        styleSpec = url; // fallback to URL if fetch fails
+      }
+      if (cancelled || !containerRef.current) return;
+      if (styleSpec && typeof styleSpec === "object") {
+        const s = styleSpec as { projection?: unknown };
+        if (!s.projection) {
+          s.projection = { type: "mercator" };
+        }
+      }
+
+      const map = new maptiler.Map({
+        container: containerRef.current,
+        // Style may be a JSON object (preferred — we inject the projection
+        // field) or a URL string fallback.
+        style: styleSpec as never,
+        center: [validStops[0].lng, validStops[0].lat],
+        zoom: 12,
+      });
+      mapRef.current = map;
+      initMap(map);
+    })();
+
+    function initMap(map: maptiler.Map) {
 
     map.on("load", async () => {
       for (const s of validStops) {
@@ -162,10 +191,15 @@ export function RequestMap({ apiKey, stops }: Props) {
         setLoadingRoute(false);
       }
     });
+    } // end initMap
 
     return () => {
-      map.remove();
-      mapRef.current = null;
+      cancelled = true;
+      const m = mapRef.current;
+      if (m) {
+        m.remove();
+        mapRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);

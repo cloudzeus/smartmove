@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarDays, FolderKanban, MapPin, FolderOpen } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -15,12 +15,12 @@ interface PageProps {
   searchParams: Promise<{ tab?: string }>;
 }
 
-const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
-  DRAFT: { label: "Προσχέδιο", tone: "bg-slate-100 text-slate-700" },
-  PLANNED: { label: "Προγραμματισμένο", tone: "bg-sky-100 text-sky-800" },
-  IN_PROGRESS: { label: "Σε εξέλιξη", tone: "bg-amber-100 text-amber-800" },
-  COMPLETED: { label: "Ολοκληρώθηκε", tone: "bg-emerald-100 text-emerald-800" },
-  CANCELLED: { label: "Ακυρώθηκε", tone: "bg-rose-100 text-rose-800" },
+const STATUS_DOT: Record<string, { dot: string; label: string; tint: string }> = {
+  DRAFT:       { dot: "bg-muted-foreground/60", label: "Προσχέδιο",      tint: "bg-muted/50" },
+  PLANNED:     { dot: "bg-sky-500",             label: "Προγραμματισμένο", tint: "bg-sky-50/40" },
+  IN_PROGRESS: { dot: "bg-amber-500",           label: "Σε εξέλιξη",      tint: "bg-amber-50/40" },
+  COMPLETED:   { dot: "bg-emerald-500",         label: "Ολοκληρώθηκε",    tint: "bg-emerald-50/40" },
+  CANCELLED:   { dot: "bg-rose-500",            label: "Ακυρώθηκε",       tint: "bg-rose-50/40" },
 };
 
 export default async function CarrierProjectsPage({ searchParams }: PageProps) {
@@ -111,6 +111,7 @@ export default async function CarrierProjectsPage({ searchParams }: PageProps) {
         kpis={[
           { label: "Σύνολο", value: String(projects.length) },
           { label: "Ενεργά", value: String(buckets.active.length) },
+          { label: "Ολοκληρωμένα", value: String(buckets.completed.length) },
           {
             label: "Έσοδα",
             value: `${(totalRevenue / 100).toLocaleString("el-GR")}€`,
@@ -118,94 +119,106 @@ export default async function CarrierProjectsPage({ searchParams }: PageProps) {
         ]}
       />
 
-      <div className="mt-6 flex gap-2 border-b border-border">
-        <TabLink href="/carrier/projects?tab=active" active={tab === "active"}>
-          Ενεργά ({buckets.active.length})
-        </TabLink>
-        <TabLink
-          href="/carrier/projects?tab=completed"
-          active={tab === "completed"}
-        >
-          Ολοκληρωμένα ({buckets.completed.length})
-        </TabLink>
-        <TabLink href="/carrier/projects?tab=all" active={tab === "all"}>
-          Όλα ({projects.length})
-        </TabLink>
-      </div>
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-3 sm:px-5">
+        {/* Filter chips */}
+        <div className="cx-card mb-2.5 flex flex-wrap items-center gap-1 p-2">
+          <TabLink href="/carrier/projects?tab=active" active={tab === "active"}>
+            Ενεργά · {buckets.active.length}
+          </TabLink>
+          <TabLink href="/carrier/projects?tab=completed" active={tab === "completed"}>
+            Ολοκληρωμένα · {buckets.completed.length}
+          </TabLink>
+          <TabLink href="/carrier/projects?tab=all" active={tab === "all"}>
+            Όλα · {projects.length}
+          </TabLink>
+        </div>
 
-      {visible.length === 0 ? (
-        <div className="mt-8">
-          <EmptyState
-            icon={FolderKanban}
-            title="Δεν υπάρχουν projects"
-            description="Όταν αποδεχτεί ο πελάτης μια προσφορά σου, θα δημιουργηθεί αυτόματα project."
-          />
-        </div>
-      ) : (
-        <div className="mt-6 grid gap-3">
-          {visible.map((p) => {
-            const status = STATUS_LABEL[p.status] ?? STATUS_LABEL.PLANNED;
-            return (
-              <Link
-                key={p.id}
-                href={`/carrier/projects/${p.id}`}
-                className="group grid gap-2 rounded-2xl border border-border bg-card p-4 transition hover:border-[var(--color-brand-blue)] hover:shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <FolderKanban className="size-4 text-muted-foreground" />
-                    <span className="font-mono text-sm font-bold text-foreground">
-                      {p.code}
+        {visible.length === 0 ? (
+          <div className="cx-card border-dashed bg-muted/30 px-4 py-8 text-center">
+            <p className="text-[12px] font-semibold text-foreground">Δεν υπάρχουν projects</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Όταν αποδεχτεί ο πελάτης μια προσφορά σου, θα δημιουργηθεί αυτόματα project.
+            </p>
+          </div>
+        ) : (
+          <ul className="cx-card divide-y divide-[var(--cx-divider)] overflow-hidden">
+            {visible.map((p) => {
+              const status = STATUS_DOT[p.status] ?? STATUS_DOT.PLANNED;
+              const taskCount = taskCountByProject.get(p.id) ?? 0;
+              return (
+                <li key={p.id}>
+                  <Link
+                    href={`/carrier/projects/${p.id}`}
+                    className={`relative grid items-center gap-3 overflow-hidden px-3 py-2 cx-transition hover:bg-[var(--cx-hover)] active:bg-[var(--cx-accent-soft)] sm:grid-cols-[auto_140px_1fr_auto_auto_auto] sm:gap-4 ${status.tint}`}
+                  >
+                    <span aria-hidden className={`absolute left-0 top-0 h-full w-0.5 ${status.dot}`} />
+
+                    {/* Status dot + code */}
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className={`cx-dot ${status.dot}`} />
+                      <span className="font-mono text-[12px] font-semibold tabular-nums text-foreground">
+                        {p.code}
+                      </span>
+                    </div>
+
+                    {/* Customer */}
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-semibold">
+                        {p.moveRequest.user.name ?? p.moveRequest.user.email}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {status.label}
+                      </p>
+                    </div>
+
+                    {/* Route */}
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] text-foreground">
+                        {p.moveRequest.fromAddress} → {p.moveRequest.toAddress}
+                      </p>
+                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                        {p.scheduledStart.toLocaleString("el-GR", {
+                          weekday: "short", day: "2-digit", month: "short",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+
+                    {/* Stops · tasks */}
+                    <div className="hidden text-right text-[10px] text-muted-foreground sm:block">
+                      <p>στάσεις · εργασίες</p>
+                      <p className="text-[11px] font-semibold tabular-nums text-foreground">
+                        {p._count.stops} · {taskCount}
+                      </p>
+                    </div>
+
+                    {/* Price */}
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Αξία
+                      </p>
+                      <p className="font-mono text-[12px] font-semibold tabular-nums text-emerald-700">
+                        {(p.totalPriceCents / 100).toLocaleString("el-GR")}€
+                      </p>
+                    </div>
+
+                    {/* Arrow */}
+                    <span className="hidden shrink-0 text-[11px] font-medium text-muted-foreground cx-transition group-hover:text-foreground sm:inline">
+                      →
                     </span>
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status.tone}`}
-                    >
-                      {status.label}
-                    </span>
-                  </div>
-                  <span className="text-sm font-bold text-emerald-700">
-                    {(p.totalPriceCents / 100).toLocaleString("el-GR")}€
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <MapPin className="size-3.5" />
-                  <span className="truncate">
-                    {p.moveRequest.fromAddress} → {p.moveRequest.toAddress}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <CalendarDays className="size-3.5" />
-                    {p.scheduledStart.toLocaleString("el-GR", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  <span>{p._count.stops} στάσεις</span>
-                  <span>{taskCountByProject.get(p.id) ?? 0} εργασίες</span>
-                  <span className="truncate">
-                    {p.moveRequest.user.name ?? p.moveRequest.user.email}
-                  </span>
-                  <span className="ml-auto inline-flex items-center gap-1 text-[var(--color-brand-blue)] opacity-0 transition group-hover:opacity-100">
-                    Άνοιγμα <ArrowRight className="size-3.5" />
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </>
   );
 }
 
 function TabLink({
-  href,
-  active,
-  children,
+  href, active, children,
 }: {
   href: string;
   active: boolean;
@@ -214,10 +227,10 @@ function TabLink({
   return (
     <Link
       href={href}
-      className={`inline-flex h-9 items-center border-b-2 px-3 text-sm font-semibold transition ${
+      className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold cx-transition cx-press ${
         active
-          ? "border-[var(--color-brand-blue)] text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground"
+          ? "bg-foreground text-background"
+          : "text-muted-foreground hover:bg-[var(--cx-hover)] hover:text-foreground active:bg-[var(--cx-accent-soft)]"
       }`}
     >
       {children}

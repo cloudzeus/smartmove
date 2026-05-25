@@ -131,63 +131,68 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="mx-auto w-full max-w-[1440px] space-y-3 px-4 py-3 sm:px-5">
+      {/* Top bar — single compact line, lead-detail style */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         <Link
           href="/carrier/projects"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 hover:text-foreground"
         >
-          <ArrowLeft className="size-3.5" /> Όλα τα projects
+          <ArrowLeft className="size-3" /> Projects
         </Link>
+        <span className="text-muted-foreground/40">·</span>
+        <span className="font-mono text-foreground">{project.code}</span>
+        <span className="text-muted-foreground/40">·</span>
+        <span
+          className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${status.tone}`}
+        >
+          {status.label}
+        </span>
+        {project.offer.contractRef && (
+          <>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="font-mono">{project.offer.contractRef}</span>
+          </>
+        )}
       </div>
 
-      <header className="rounded-2xl border border-border bg-gradient-to-br from-indigo-50 to-white p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <FolderKanban className="size-4 text-indigo-600" />
-              <span className="font-mono text-base font-bold text-foreground">
-                {project.code}
-              </span>
-              <span
-                className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status.tone}`}
-              >
-                {status.label}
-              </span>
-            </div>
-            <h1 className="mt-2 text-xl font-bold text-foreground">
-              {project.moveRequest.user.name ?? project.moveRequest.user.email}
-            </h1>
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-              <MapPin className="size-3.5" />
-              {project.moveRequest.fromAddress} → {project.moveRequest.toAddress}
-            </p>
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-              <CalendarDays className="size-3.5" />
+      {/* Hero band — decision-critical info on one line */}
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border pb-2">
+        <h1 className="cx-h1 flex items-center gap-1.5">
+          <MapPin className="size-4 text-sky-600" />
+          <span className="truncate">{project.moveRequest.fromAddress}</span>
+          <span className="text-muted-foreground/60">→</span>
+          <MapPin className="size-4 text-rose-600" />
+          <span className="truncate">{project.moveRequest.toAddress}</span>
+        </h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <CalendarDays className="size-3.5" />
+            <strong className="text-foreground">
               {project.scheduledStart.toLocaleString("el-GR", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
+                weekday: "short", day: "2-digit", month: "short",
+                hour: "2-digit", minute: "2-digit",
               })}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-extrabold text-emerald-700">
-              {(project.totalPriceCents / 100).toLocaleString("el-GR")}€
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {project.stops.length} στάσεις · {totalTasks} εργασίες
-            </div>
-            {project.offer.contractRef && (
-              <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                {project.offer.contractRef}
-              </div>
-            )}
-          </div>
+            </strong>
+          </span>
+          <span>·</span>
+          <span>
+            <strong className="text-foreground">{project.moveRequest.user.name ?? project.moveRequest.user.email}</strong>
+          </span>
+          <span>·</span>
+          <span>
+            <strong className="text-foreground">{project.stops.length}</strong> στάσεις
+          </span>
+          <span>·</span>
+          <span>
+            <strong className="text-foreground">{totalTasks}</strong> εργασίες
+          </span>
+          <span>·</span>
+          <span className="font-semibold tabular-nums text-emerald-700">
+            {(project.totalPriceCents / 100).toLocaleString("el-GR")}€
+          </span>
         </div>
-      </header>
+      </div>
 
       <ProjectDetailClient
         project={{

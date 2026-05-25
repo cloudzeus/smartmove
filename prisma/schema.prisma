@@ -540,6 +540,10 @@ model CarrierEmployee {
   id        String              @id @default(cuid())
   tenantId  String
   tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Branch assignment — ο υπάλληλος κληρονομεί service area από το branch
+  // (lat/lng/serviceRadiusKm). Όταν null, ο υπάλληλος εξυπηρετεί παντού.
+  branchId  String?
+  branch    Branch?             @relation(fields: [branchId], references: [id], onDelete: SetNull)
   name      String
   role      CarrierEmployeeRole @default(DRIVER)
   phone     String?
@@ -602,6 +606,19 @@ model CarrierPartner {
   phone     String?
   email     String?
   notes     String?            @db.Text
+
+  // Service area — δεν επιτρέπουμε ανάθεση εκτός εμβέλειας. Π.χ. γερανός
+  // Αθήνας δεν εξυπηρετεί Θεσσαλονίκη — τεράστιο κόστος μετακίνησης.
+  //   ANY    → χωρίς περιορισμό (default — backwards compat)
+  //   CITIES → λίστα με ονόματα πόλεων (`serviceCities`)
+  //   RADIUS → ακτίνα γύρω από έδρα (`hqLat`, `hqLng`, `serviceRadiusKm`)
+  serviceMode      ServiceAreaMode @default(ANY)
+  serviceCities    String?         @db.Text  // JSON array ["Αθήνα","Πειραιάς"]
+  hqLat            Float?
+  hqLng            Float?
+  hqAddress        String?
+  serviceRadiusKm  Int?
+
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   deletedAt DateTime?
@@ -613,6 +630,12 @@ model CarrierPartner {
 
   @@index([tenantId])
   @@index([companyId])
+}
+
+enum ServiceAreaMode {
+  ANY
+  CITIES
+  RADIUS
 }
 
 model PartnerContact {
@@ -1183,12 +1206,22 @@ model Branch {
   lng              Float?
   serviceRadiusKm  Int    @default(50)
 
+  // Service offerings to other carriers — όταν true, αυτό το branch
+  // λειτουργεί και ως subcontractor (νοικιάζει γερανό, οδηγούς, εξοπλισμό
+  // σε άλλους carriers). `offeredServices` είναι JSON array με service type
+  // strings (CRANE, PACKING, LOADING, UNLOADING, ASSEMBLY, STORAGE,
+  // CLEANUP, VEHICLE_RENTAL, DRIVER, OTHER).
+  offersToOthers   Boolean @default(false)
+  offeredServices  String? @db.Text
+  offeringsNotes   String? @db.Text
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicles    Vehicle[]
+  employees   CarrierEmployee[]
   memberships TenantMembership[]
 
   @@index([tenantId])

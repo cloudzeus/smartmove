@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Filter, FolderKanban, Search, User, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Gantt, type GanttTask } from "./gantt";
-import { setJobTaskStatus } from "@/server/actions/carrier-job-tasks.action";
+import type { GanttTask } from "./gantt";
+import { StopGantt, type StopGanttStop } from "./stop-gantt";
+import { rescheduleJobTask } from "@/server/actions/carrier-job-tasks.action";
 
 type Mode = "byProject" | "byAssignee" | "flat";
 
@@ -49,30 +51,56 @@ export function TasksMasterClient({
     });
   }, [tasks, query, statusFilter]);
 
-  const ganttTasks: GanttTask[] = filtered.map((t) => ({
-    id: t.id,
-    title: t.title,
-    category: t.category,
-    status: t.status,
-    startAt: t.startAt,
-    durationMinutes: t.durationMinutes,
-    assigneeKind: t.assigneeKind,
-    assigneeName: t.assigneeName,
-    vehiclePlate: t.vehiclePlate,
-    groupKey:
-      mode === "byProject"
-        ? t.moveRequestId
-        : mode === "byAssignee"
-          ? `${t.assigneeKind}:${t.assigneeName ?? "—"}`
-          : t.id,
-    groupLabel:
-      mode === "byProject"
-        ? t.projectLabel
-        : mode === "byAssignee"
-          ? t.assigneeName ?? "Χωρίς ανάθεση"
-          : t.title,
-    href: `/carrier/leads/${t.moveRequestId}`,
-  }));
+  const router = useRouter();
+
+  // Synthesize StopGantt stops grouped by current mode.
+  const syntheticStops: StopGanttStop[] = useMemo(() => {
+    if (filtered.length === 0) return [];
+    const groups = new Map<string, { label: string; tasks: typeof filtered }>();
+    for (const t of filtered) {
+      const key =
+        mode === "byProject"
+          ? t.moveRequestId
+          : mode === "byAssignee"
+            ? `${t.assigneeKind}:${t.assigneeName ?? "—"}`
+            : "all";
+      const label =
+        mode === "byProject"
+          ? t.projectLabel
+          : mode === "byAssignee"
+            ? (t.assigneeName ?? "Χωρίς ανάθεση")
+            : "Όλες οι εργασίες";
+      const cur = groups.get(key) ?? { label, tasks: [] };
+      cur.tasks.push(t);
+      groups.set(key, cur);
+    }
+    let seq = 1;
+    return Array.from(groups.entries()).map(([key, g]) => ({
+      id: `grp-${key}`,
+      sequence: seq++,
+      type: "WAYPOINT",
+      label: g.label,
+      address: "",
+      services: [
+        {
+          id: `svc-${key}`,
+          serviceType: "OTHER" as const,
+          label: null,
+          tasks: g.tasks.map((t) => ({
+            id: t.id,
+            title: t.title,
+            startAt: t.startAt,
+            durationMinutes: t.durationMinutes,
+            status: t.status,
+            assigneeKind: t.assigneeKind,
+            assigneeEmployeeName: t.assigneeKind === "EMPLOYEE" ? t.assigneeName : null,
+            assigneePartnerName: t.assigneeKind === "PARTNER" ? t.assigneeName : null,
+            vehiclePlate: t.vehiclePlate,
+          })),
+        },
+      ],
+    }));
+  }, [filtered, mode]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,13 +167,18 @@ export function TasksMasterClient({
         <WorkloadSummary tasks={filtered} />
       )}
 
-      {/* Gantt */}
-      <Gantt
-        tasks={ganttTasks}
-        mode={mode === "flat" ? "flat" : mode}
-        days={14}
-        onStatusChange={async (id, next) => {
-          await setJobTaskStatus({ id, status: next });
+      {/* Dynamic Gantt — ίδιο με το lead detail πλάνο εργασιών (drag-drop, auto-snap, conflict resolution) */}
+      <StopGantt
+        stops={syntheticStops}
+        onReschedule={async (id, startAtIso, durationMinutes) => {
+          const res = await rescheduleJobTask({ id, startAt: startAtIso, durationMinutes });
+          if (!res.ok) return { ok: false, error: res.error };
+          router.refresh();
+          return {
+            ok: true,
+            warning: res.warning ?? null,
+            adjustedStartAt: res.adjustedStartAt ?? null,
+          };
         }}
       />
 

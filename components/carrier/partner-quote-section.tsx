@@ -24,6 +24,10 @@ import {
 } from "@/server/actions/partner-quote-requests.action";
 import { assignJobTaskPartner } from "@/server/actions/carrier-job-tasks.action";
 import {
+  partnerCoversLocation,
+  type ServiceAreaMode,
+} from "@/lib/partner-service-area";
+import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -56,6 +60,17 @@ export interface PartnerOption {
   phone: string | null;
   companyId: string | null;
   companyName: string | null;
+  serviceMode?: ServiceAreaMode;
+  serviceCities?: string | null;
+  hqLat?: number | null;
+  hqLng?: number | null;
+  serviceRadiusKm?: number | null;
+}
+
+export interface DestinationLocation {
+  city?: string | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface CompanyOption {
@@ -124,6 +139,8 @@ interface Props {
   unassignedTasks?: UnassignedTaskOption[];
   /** Partners that can be assigned to a task (carrierPartner rows). */
   assignablePartners?: AssignablePartner[];
+  /** Destination of the move — used to badge partners by coverage. */
+  destination?: DestinationLocation;
 }
 
 export function PartnerQuoteSection({
@@ -135,6 +152,7 @@ export function PartnerQuoteSection({
   requests,
   unassignedTasks = [],
   assignablePartners = [],
+  destination,
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -199,6 +217,7 @@ export function PartnerQuoteSection({
           companies={companies}
           contacts={contacts}
           acceptedSlotAt={acceptedSlotAt ?? null}
+          destination={destination}
           onClose={() => setOpen(false)}
         />
       )}
@@ -467,6 +486,7 @@ function NewRequestDialog({
   companies,
   contacts,
   acceptedSlotAt,
+  destination,
   onClose,
 }: {
   moveRequestId: string;
@@ -474,6 +494,7 @@ function NewRequestDialog({
   companies: CompanyOption[];
   contacts: ContactOption[];
   acceptedSlotAt: Date | null;
+  destination?: DestinationLocation;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -657,13 +678,29 @@ function NewRequestDialog({
               <option value="">— Επέλεξε ή πληκτρολόγησε νέο παρακάτω —</option>
               {partners.length > 0 && (
                 <optgroup label="👤 Πρόσωπα (συνεργάτες)">
-                  {partners.map((p) => (
-                    <option key={p.id} value={`partner:${p.id}`}>
-                      {p.name}
-                      {p.companyName ? ` · ${p.companyName}` : ""}
-                      {p.email ? ` (${p.email})` : ""}
-                    </option>
-                  ))}
+                  {partners.map((p) => {
+                    let prefix = "";
+                    if (destination && p.serviceMode) {
+                      const cov = partnerCoversLocation(
+                        {
+                          serviceMode: p.serviceMode,
+                          serviceCities: p.serviceCities ?? null,
+                          hqLat: p.hqLat ?? null,
+                          hqLng: p.hqLng ?? null,
+                          serviceRadiusKm: p.serviceRadiusKm ?? null,
+                        },
+                        destination,
+                      );
+                      prefix = cov.covered ? "✓ " : "✗ ";
+                    }
+                    return (
+                      <option key={p.id} value={`partner:${p.id}`}>
+                        {prefix}{p.name}
+                        {p.companyName ? ` · ${p.companyName}` : ""}
+                        {p.email ? ` (${p.email})` : ""}
+                      </option>
+                    );
+                  })}
                 </optgroup>
               )}
               {companies.length > 0 && (

@@ -49,6 +49,7 @@ const employeeSchema = z.object({
   idNumber: z.string().trim().max(40).optional().or(z.literal("")),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
   active: z.coerce.boolean().default(true),
+  branchId: z.string().trim().optional().or(z.literal("")),
 });
 
 export async function upsertEmployee(input: unknown): Promise<ActionResult<{ id: string }>> {
@@ -63,6 +64,17 @@ export async function upsertEmployee(input: unknown): Promise<ActionResult<{ id:
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Λάθος δεδομένα" };
   }
   const d = parsed.data;
+  // Validate branchId belongs to tenant if provided
+  let branchId: string | null = null;
+  if (d.branchId) {
+    const b = await db.branch.findFirst({
+      where: { id: d.branchId, tenantId: ctx.tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!b) return { ok: false, error: "Άκυρο υποκατάστημα." };
+    branchId = b.id;
+  }
+
   const data = {
     name: d.name,
     role: d.role,
@@ -71,6 +83,7 @@ export async function upsertEmployee(input: unknown): Promise<ActionResult<{ id:
     idNumber: d.idNumber || null,
     notes: d.notes || null,
     active: d.active,
+    branchId,
   };
   try {
     let row;

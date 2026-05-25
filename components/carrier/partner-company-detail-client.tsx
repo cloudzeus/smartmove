@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { PartnerServiceAreaEditor } from "./partner-service-area-editor";
+import { parseServiceCities } from "@/lib/partner-service-area";
 import {
   deletePartnerCompany,
   deletePartnerContact,
@@ -53,16 +55,24 @@ interface LinkedPartner {
   id: string;
   name: string;
   kind: string;
+  serviceMode: "ANY" | "CITIES" | "RADIUS";
+  serviceCities: string | null;
+  hqAddress: string | null;
+  hqLat: number | null;
+  hqLng: number | null;
+  serviceRadiusKm: number | null;
 }
 
 export function PartnerCompanyDetailClient({
   company,
   contacts,
   partners,
+  mapApiKey,
 }: {
   company: Company;
   contacts: Contact[];
   partners: LinkedPartner[];
+  mapApiKey?: string | null;
 }) {
   const [editingCompany, setEditingCompany] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | "new" | null>(null);
@@ -122,25 +132,26 @@ export function PartnerCompanyDetailClient({
 
         {/* Linked partners */}
         {partners.length > 0 && (
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="mb-3 font-display text-base font-bold text-foreground">
-              Συνδεδεμένοι συνεργάτες ({partners.length})
+          <div className="cx-card p-3">
+            <h2 className="cx-h2 mb-2">
+              Συνδεδεμένοι συνεργάτες · {partners.length}
             </h2>
-            <ul className="grid gap-2 sm:grid-cols-2">
+            <ul className="space-y-3">
               {partners.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2"
-                >
-                  <Building2 className="size-4 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {p.name}
-                    </p>
-                    <p className="text-[10px] uppercase text-muted-foreground">
-                      {p.kind}
-                    </p>
+                <li key={p.id} className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-1.5">
+                    <Building2 className="size-3.5 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-semibold text-foreground">
+                        {p.name}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {p.kind}
+                      </p>
+                    </div>
+                    <ServiceAreaSummaryBadge partner={p} />
                   </div>
+                  <PartnerServiceAreaEditor partner={p} mapApiKey={mapApiKey} />
                 </li>
               ))}
             </ul>
@@ -656,5 +667,34 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function ServiceAreaSummaryBadge({ partner }: {
+  partner: {
+    serviceMode: "ANY" | "CITIES" | "RADIUS";
+    serviceCities: string | null;
+    serviceRadiusKm: number | null;
+  };
+}) {
+  if (partner.serviceMode === "ANY") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground ring-1 ring-inset ring-border">
+        🌐 Παντού
+      </span>
+    );
+  }
+  if (partner.serviceMode === "CITIES") {
+    const n = parseServiceCities(partner.serviceCities).length;
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800 ring-1 ring-inset ring-sky-200">
+        📍 {n} {n === 1 ? "πόλη" : "πόλεις"}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">
+      ⊙ {partner.serviceRadiusKm ?? "—"} km
+    </span>
   );
 }

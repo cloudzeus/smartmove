@@ -143,6 +143,11 @@ export default async function CarrierLeadDetailPage({
       companyName: p.company
         ? p.company.commercialName ?? p.company.legalName
         : null,
+      serviceMode: p.serviceMode,
+      serviceCities: p.serviceCities,
+      hqLat: p.hqLat,
+      hqLng: p.hqLng,
+      serviceRadiusKm: p.serviceRadiusKm,
     }));
     companyOptions = companies.map((c) => ({
       id: c.id,
@@ -548,6 +553,11 @@ export default async function CarrierLeadDetailPage({
               contacts={contactOptions}
               acceptedSlotAt={l.myOffer?.acceptedSlotAt ?? null}
               requests={quoteRequests}
+              destination={{
+                city: l.toLocality,
+                lat: l.toLat,
+                lng: l.toLng,
+              }}
               unassignedTasks={panelTasks
                 .filter((t) => t.assigneeKind === "UNASSIGNED" && t.status !== "CANCELLED" && t.status !== "DONE")
                 .map((t) => ({

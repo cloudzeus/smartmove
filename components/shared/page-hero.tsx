@@ -125,15 +125,23 @@ export function PageHero({
               gridTemplateColumns: undefined,
             }}
           >
-            {kpis.map((k) => (
+            {kpis.map((k, idx) => (
               <li
                 key={k.label}
                 className={cn(
                   "flex flex-col gap-1 bg-white/95 px-3 py-3 backdrop-blur sm:px-5 sm:py-4",
-                  // Carrier: horizontal compact cell matching dashboard KpiCell
-                  "[.carrier-shell_&]:cx-card [.carrier-shell_&]:flex-row [.carrier-shell_&]:items-center [.carrier-shell_&]:gap-2.5 [.carrier-shell_&]:bg-card [.carrier-shell_&]:px-2.5 [.carrier-shell_&]:py-2 [.carrier-shell_&]:sm:px-2.5 [.carrier-shell_&]:sm:py-2 [.carrier-shell_&]:backdrop-blur-none",
+                  // Carrier: horizontal compact cell with accent rail — matches dashboard KpiCell
+                  "[.carrier-shell_&]:cx-card [.carrier-shell_&]:relative [.carrier-shell_&]:flex-row [.carrier-shell_&]:items-center [.carrier-shell_&]:gap-2.5 [.carrier-shell_&]:overflow-hidden [.carrier-shell_&]:bg-card [.carrier-shell_&]:px-2.5 [.carrier-shell_&]:py-2 [.carrier-shell_&]:sm:px-2.5 [.carrier-shell_&]:sm:py-2 [.carrier-shell_&]:backdrop-blur-none",
                 )}
               >
+                {/* Accent rail (carrier only) — semantic by index pattern */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "hidden [.carrier-shell_&]:absolute [.carrier-shell_&]:left-0 [.carrier-shell_&]:top-0 [.carrier-shell_&]:block [.carrier-shell_&]:h-full [.carrier-shell_&]:w-0.5",
+                    kpiRailColor(idx, k.deltaTone),
+                  )}
+                />
                 <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground [.carrier-shell_&]:flex-1 [.carrier-shell_&]:truncate [.carrier-shell_&]:text-[10px] [.carrier-shell_&]:font-semibold [.carrier-shell_&]:tracking-[0.06em] [.carrier-shell_&]:normal-case [.carrier-shell_&]:uppercase">
                   {k.label}
                 </span>
@@ -163,4 +171,17 @@ export function PageHero({
       </div>
     </section>
   );
+}
+
+/**
+ * Pick a semantic accent color for the KPI rail. If `deltaTone` is set,
+ * that wins. Otherwise rotate through a stable palette by index so a row of
+ * KPIs reads as a multi-color strip (matches dashboard KpiStrip rails).
+ */
+function kpiRailColor(idx: number, tone?: "positive" | "negative" | "neutral"): string {
+  if (tone === "positive") return "bg-emerald-500";
+  if (tone === "negative") return "bg-rose-500";
+  if (tone === "neutral") return "bg-muted-foreground/40";
+  const palette = ["bg-sky-500", "bg-amber-500", "bg-emerald-500", "bg-violet-500"];
+  return palette[idx % palette.length];
 }

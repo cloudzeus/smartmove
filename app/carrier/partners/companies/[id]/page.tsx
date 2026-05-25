@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 import { PageHero } from "@/components/shared/page-hero";
 import { PartnerCompanyDetailClient } from "@/components/carrier/partner-company-detail-client";
 
@@ -89,7 +90,14 @@ export default async function PartnerCompanyDetailPage({ params }: PageProps) {
             id: p.id,
             name: p.name,
             kind: p.kind,
+            serviceMode: p.serviceMode,
+            serviceCities: p.serviceCities,
+            hqAddress: p.hqAddress,
+            hqLat: p.hqLat,
+            hqLng: p.hqLng,
+            serviceRadiusKm: p.serviceRadiusKm,
           }))}
+          mapApiKey={env.maptilerApiKey()}
         />
       </div>
     </>
